@@ -1,0 +1,23 @@
+{
+  "code": 200,
+  "msg": "SUCCESS",
+  "data": {
+    "userSeq": 1001,
+    "familySeq": 2002,
+    "devices": [
+      {
+        "deviceSeq": 3003,
+        "deviceId": "001122334455abcd",
+        "deviceType": 3,
+        "modelCode": 0,
+        "isConnected": 1,
+        "thermostats": [
+          {
+            "zoneId": 1,
+            "name": "Home"
+          }
+        ]
+      }
+    ]
+  }
+}

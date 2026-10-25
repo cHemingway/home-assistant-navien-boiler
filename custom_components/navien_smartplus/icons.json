@@ -1,0 +1,17 @@
+{
+  "entity": {
+    "binary_sensor": {
+      "burner": { "default": "mdi:fire-off", "state": { "on": "mdi:fire" } },
+      "hot_water_active": { "default": "mdi:water-boiler-off", "state": { "on": "mdi:water-boiler" } }
+    },
+    "sensor": {
+      "heating_gas": { "default": "mdi:radiator" },
+      "hot_water_gas": { "default": "mdi:water-boiler" },
+      "error_code": { "default": "mdi:alert-circle-outline" }
+    },
+    "switch": {
+      "holiday": { "default": "mdi:airplane" },
+      "holiday_zone": { "default": "mdi:airplane" }
+    }
+  }
+}

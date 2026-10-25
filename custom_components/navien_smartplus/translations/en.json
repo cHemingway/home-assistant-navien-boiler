@@ -1,0 +1,81 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Sign in to Navien Smart Plus",
+        "description": "Use the email address and password you sign in to the Navien Smart Plus app with.",
+        "data": {
+          "email": "Email",
+          "password": "Password"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Authentication expired for {name}",
+        "description": "Enter the Navien Smart Plus password for {email}.",
+        "data": {
+          "password": "Password"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Invalid authentication",
+      "cannot_connect": "Failed to connect",
+      "no_devices": "This account has no Smart Plus devices.",
+      "unknown": "Unexpected error"
+    },
+    "abort": {
+      "already_configured": "Account is already configured",
+      "reauth_successful": "Re-authentication was successful",
+      "wrong_account": "That password signs in to a different Navien account."
+    }
+  },
+  "entity": {
+    "binary_sensor": {
+      "burner": { "name": "Burner" },
+      "hot_water_active": { "name": "Hot water running" },
+      "fault": { "name": "Fault" }
+    },
+    "climate": {
+      "zone": {
+        "state_attributes": {
+          "preset_mode": {
+            "state": {
+              "none": "None",
+              "boost": "Boost",
+              "override": "Override"
+            }
+          }
+        }
+      }
+    },
+    "sensor": {
+      "outdoor_temperature": { "name": "Outdoor temperature" },
+      "error_code": { "name": "Error code" },
+      "heating_gas": { "name": "Heating gas this year" },
+      "hot_water_gas": { "name": "Hot water gas this year" },
+      "total_gas": { "name": "Gas this year" },
+      "heating_hours": { "name": "Heating burner hours this year" },
+      "hot_water_hours": { "name": "Hot water burner hours this year" }
+    },
+    "switch": {
+      "holiday": { "name": "Holiday mode" },
+      "holiday_zone": { "name": "Holiday mode {zone}" }
+    },
+    "water_heater": {
+      "hot_water": {
+        "name": "Hot water",
+        "state": {
+          "auto": "Schedule",
+          "on": "On",
+          "boost": "Boost",
+          "off": "Off"
+        }
+      }
+    }
+  },
+  "exceptions": {
+    "zone_off": {
+      "message": "{zone} is off. Switch it to Auto or Heat before setting a temperature."
+    }
+  }
+}

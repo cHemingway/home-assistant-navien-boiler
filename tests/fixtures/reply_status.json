@@ -1,0 +1,53 @@
+{
+  "topic": "cmd/3/2002/1001/00000000-0000-0000-0000-000000000000/res",
+  "data": {
+    "protocolVersion": 1,
+    "clientID": "00000000-0000-0000-0000-000000000000",
+    "sessionID": "1792958369231",
+    "requestTopic": "cmd/3/nsp-001122334455/st",
+    "response": {
+      "deviceType": 3,
+      "macAddress": "001122334455",
+      "additionalValue": "abcd",
+      "status": {
+        "command": 16777219,
+        "outsideTemperature": 92,
+        "regionCode": 2643743,
+        "errorCode": 0,
+        "subErrorCode": 0,
+        "operationBusy": 1,
+        "dhwOperationBusy": 1,
+        "dhwOperationMode": 0,
+        "outsideTempDisplayUse": 2,
+        "outsideTempUse": 2,
+        "nrcPairing": 1,
+        "vcmPairing": 0,
+        "nrcConnected": 1,
+        "vcmConnected": 0,
+        "boilerConnected": 1,
+        "intelligentCurrentProgramNum": 39,
+        "dhwCurrentProgramNum": 4,
+        "ecoUse": 1,
+        "maintenanceDay": 0,
+        "geofenceTransition": 1,
+        "thermostats": [
+          {
+            "zoneId": 1,
+            "insideOperationBusy": 1,
+            "insideOperationMode": 4,
+            "insideTemperature": 39,
+            "insideTemperatureSetting": 38,
+            "preHeatingUse": 1,
+            "freezeZoneProtectionUse": 1,
+            "heatingCurrentProgramNum": 4,
+            "geofenceUseSetting": 1,
+            "holidayUseSetting": 1,
+            "preHeatingUseSetting": 1,
+            "freezeProtectionTemperature": 8,
+            "programReservationType": 1
+          }
+        ]
+      }
+    }
+  }
+}

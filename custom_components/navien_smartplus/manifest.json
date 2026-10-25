@@ -1,0 +1,23 @@
+{
+  "domain": "navien_smartplus",
+  "name": "Navien Smart Plus",
+  "codeowners": [
+    "@cHemingway"
+  ],
+  "config_flow": true,
+  "dependencies": [
+    "recorder"
+  ],
+  "documentation": "https://github.com/cHemingway/home-assistant-navien-boiler",
+  "integration_type": "hub",
+  "iot_class": "cloud_push",
+  "issue_tracker": "https://github.com/cHemingway/home-assistant-navien-boiler/issues",
+  "loggers": [
+    "custom_components.navien_smartplus.api",
+    "aiomqtt"
+  ],
+  "requirements": [
+    "aiomqtt>=2.5.0"
+  ],
+  "version": "0.1.0"
+}

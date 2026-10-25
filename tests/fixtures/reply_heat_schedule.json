@@ -1,0 +1,393 @@
+{
+ "response": {
+  "deviceType": 3,
+  "macAddress": "001122334455",
+  "additionalValue": "abcd",
+  "reservationUse": 2,
+  "heatingReservation": [
+   {
+    "reservation": [
+     {
+      "day": 0,
+      "enable": 2,
+      "rsvNum": 1,
+      "mode": 2,
+      "hour": 6,
+      "min": 30,
+      "param": 36
+     },
+     {
+      "min": 30,
+      "enable": 2,
+      "mode": 2,
+      "param": 36,
+      "day": 0,
+      "rsvNum": 2,
+      "hour": 9
+     },
+     {
+      "enable": 2,
+      "hour": 15,
+      "param": 36,
+      "rsvNum": 3,
+      "min": 0,
+      "mode": 2,
+      "day": 0
+     },
+     {
+      "param": 36,
+      "enable": 2,
+      "hour": 17,
+      "day": 0,
+      "min": 0,
+      "rsvNum": 4,
+      "mode": 2
+     },
+     {
+      "param": 32,
+      "enable": 2,
+      "mode": 2,
+      "day": 0,
+      "hour": 20,
+      "min": 0,
+      "rsvNum": 5
+     },
+     {
+      "day": 0,
+      "min": 30,
+      "param": 32,
+      "rsvNum": 6,
+      "hour": 21,
+      "enable": 2,
+      "mode": 2
+     },
+     {
+      "rsvNum": 1,
+      "hour": 5,
+      "min": 30,
+      "enable": 2,
+      "mode": 2,
+      "param": 36,
+      "day": 1
+     },
+     {
+      "mode": 2,
+      "enable": 2,
+      "hour": 9,
+      "min": 30,
+      "param": 34,
+      "day": 1,
+      "rsvNum": 2
+     },
+     {
+      "rsvNum": 3,
+      "day": 1,
+      "min": 30,
+      "hour": 12,
+      "enable": 2,
+      "mode": 2,
+      "param": 34
+     },
+     {
+      "min": 0,
+      "param": 36,
+      "day": 1,
+      "rsvNum": 4,
+      "enable": 2,
+      "mode": 2,
+      "hour": 17
+     },
+     {
+      "mode": 2,
+      "param": 32,
+      "rsvNum": 5,
+      "min": 0,
+      "enable": 2,
+      "day": 1,
+      "hour": 20
+     },
+     {
+      "param": 32,
+      "enable": 2,
+      "mode": 2,
+      "day": 1,
+      "rsvNum": 6,
+      "hour": 21,
+      "min": 30
+     },
+     {
+      "mode": 2,
+      "param": 36,
+      "enable": 2,
+      "day": 2,
+      "rsvNum": 1,
+      "hour": 5,
+      "min": 30
+     },
+     {
+      "enable": 2,
+      "param": 34,
+      "mode": 2,
+      "rsvNum": 2,
+      "hour": 9,
+      "day": 2,
+      "min": 30
+     },
+     {
+      "min": 30,
+      "mode": 2,
+      "param": 34,
+      "day": 2,
+      "enable": 2,
+      "hour": 12,
+      "rsvNum": 3
+     },
+     {
+      "param": 36,
+      "min": 0,
+      "rsvNum": 4,
+      "mode": 2,
+      "enable": 2,
+      "day": 2,
+      "hour": 17
+     },
+     {
+      "min": 0,
+      "mode": 2,
+      "param": 36,
+      "hour": 20,
+      "enable": 2,
+      "day": 2,
+      "rsvNum": 5
+     },
+     {
+      "param": 32,
+      "rsvNum": 6,
+      "day": 2,
+      "hour": 20,
+      "enable": 2,
+      "min": 30,
+      "mode": 2
+     },
+     {
+      "min": 30,
+      "rsvNum": 1,
+      "param": 36,
+      "mode": 2,
+      "hour": 5,
+      "day": 3,
+      "enable": 2
+     },
+     {
+      "enable": 2,
+      "day": 3,
+      "rsvNum": 2,
+      "hour": 9,
+      "min": 30,
+      "mode": 2,
+      "param": 34
+     },
+     {
+      "enable": 2,
+      "day": 3,
+      "rsvNum": 3,
+      "min": 30,
+      "mode": 2,
+      "param": 34,
+      "hour": 12
+     },
+     {
+      "rsvNum": 4,
+      "min": 0,
+      "param": 36,
+      "hour": 17,
+      "enable": 2,
+      "mode": 2,
+      "day": 3
+     },
+     {
+      "day": 3,
+      "mode": 2,
+      "enable": 2,
+      "param": 36,
+      "rsvNum": 5,
+      "min": 0,
+      "hour": 20
+     },
+     {
+      "mode": 2,
+      "param": 32,
+      "rsvNum": 6,
+      "hour": 20,
+      "day": 3,
+      "enable": 2,
+      "min": 30
+     },
+     {
+      "min": 30,
+      "enable": 2,
+      "hour": 5,
+      "mode": 2,
+      "rsvNum": 1,
+      "param": 36,
+      "day": 4
+     },
+     {
+      "enable": 2,
+      "rsvNum": 2,
+      "day": 4,
+      "hour": 9,
+      "mode": 2,
+      "min": 30,
+      "param": 34
+     },
+     {
+      "day": 4,
+      "enable": 2,
+      "rsvNum": 3,
+      "min": 30,
+      "mode": 2,
+      "param": 34,
+      "hour": 12
+     },
+     {
+      "rsvNum": 4,
+      "enable": 2,
+      "hour": 16,
+      "min": 0,
+      "param": 36,
+      "mode": 2,
+      "day": 4
+     },
+     {
+      "enable": 2,
+      "min": 0,
+      "param": 36,
+      "mode": 2,
+      "day": 4,
+      "rsvNum": 5,
+      "hour": 20
+     },
+     {
+      "min": 30,
+      "mode": 2,
+      "day": 4,
+      "enable": 2,
+      "rsvNum": 6,
+      "hour": 20,
+      "param": 32
+     },
+     {
+      "day": 5,
+      "rsvNum": 1,
+      "mode": 2,
+      "param": 36,
+      "enable": 2,
+      "hour": 5,
+      "min": 30
+     },
+     {
+      "param": 34,
+      "rsvNum": 2,
+      "day": 5,
+      "min": 30,
+      "mode": 2,
+      "enable": 2,
+      "hour": 9
+     },
+     {
+      "rsvNum": 3,
+      "enable": 2,
+      "min": 30,
+      "param": 34,
+      "mode": 2,
+      "hour": 12,
+      "day": 5
+     },
+     {
+      "rsvNum": 4,
+      "hour": 17,
+      "enable": 2,
+      "min": 0,
+      "mode": 2,
+      "day": 5,
+      "param": 36
+     },
+     {
+      "enable": 2,
+      "min": 0,
+      "day": 5,
+      "hour": 20,
+      "mode": 2,
+      "param": 36,
+      "rsvNum": 5
+     },
+     {
+      "param": 32,
+      "enable": 2,
+      "mode": 2,
+      "hour": 20,
+      "min": 30,
+      "day": 5,
+      "rsvNum": 6
+     },
+     {
+      "day": 6,
+      "enable": 2,
+      "rsvNum": 1,
+      "hour": 6,
+      "min": 30,
+      "mode": 2,
+      "param": 36
+     },
+     {
+      "mode": 2,
+      "min": 30,
+      "hour": 9,
+      "day": 6,
+      "param": 36,
+      "rsvNum": 2,
+      "enable": 2
+     },
+     {
+      "enable": 2,
+      "hour": 15,
+      "mode": 2,
+      "rsvNum": 3,
+      "min": 0,
+      "param": 36,
+      "day": 6
+     },
+     {
+      "hour": 17,
+      "day": 6,
+      "min": 0,
+      "mode": 2,
+      "param": 36,
+      "enable": 2,
+      "rsvNum": 4
+     },
+     {
+      "param": 32,
+      "hour": 20,
+      "min": 0,
+      "rsvNum": 5,
+      "day": 6,
+      "mode": 2,
+      "enable": 2
+     },
+     {
+      "param": 32,
+      "rsvNum": 6,
+      "day": 6,
+      "enable": 2,
+      "hour": 21,
+      "min": 30,
+      "mode": 2
+     }
+    ],
+    "zoneId": 1
+   }
+  ]
+ }
+}

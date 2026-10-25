@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "home-assistant",
+      "runtimeExecutable": ".venv/bin/hass",
+      "runtimeArgs": ["-c", "config"],
+      "port": 8124
+    }
+  ]
+}

@@ -1,0 +1,40 @@
+{
+  "topic": "cmd/3/2002/1001/00000000-0000-0000-0000-000000000000/res/did",
+  "data": {
+    "protocolVersion": 1,
+    "clientID": "00000000-0000-0000-0000-000000000000",
+    "sessionID": "1792958369231",
+    "requestTopic": "cmd/3/nsp-001122334455/st/start",
+    "response": {
+      "deviceType": 3,
+      "macAddress": "001122334455",
+      "additionalValue": "abcd",
+      "feature": {
+        "countryCode": 0,
+        "bcmModelCode": 0,
+        "boilerModelTypeCode": 38,
+        "boilerVolumeCode": 0,
+        "bcmSwVersion": 251658240,
+        "boilerControllerSwVersion": 168427520,
+        "bcmSwCode": 50334017,
+        "boilerControllerSwCode": 0,
+        "holidayUse": 2,
+        "insideUse": 2,
+        "dhwUse": 2,
+        "weeklyHeatingReservationUse": 2,
+        "weeklyDHWReservationUse": 2,
+        "intelligentUse": 1,
+        "intelligentReadUse": 1,
+        "outsideTempUse": 2,
+        "fuelUsageUse": 2,
+        "vcmPairing": 0,
+        "nrcPairing": 1,
+        "fastDHWUseType": 1,
+        "preHeatingUse": 2,
+        "geofenceUse": 2,
+        "fuelUsageResetUse": 2,
+        "maintenanceDayUse": 2
+      }
+    }
+  }
+}

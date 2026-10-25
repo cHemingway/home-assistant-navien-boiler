@@ -1,0 +1,9 @@
+research/
+.env
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.ruff_cache/
+config/
+.DS_Store

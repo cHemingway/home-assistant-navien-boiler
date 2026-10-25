@@ -1,0 +1,245 @@
+"""Data update coordinators for Navien Smart Plus."""
+
+from __future__ import annotations
+
+from dataclasses import asdict, dataclass, replace
+from datetime import date, datetime
+from typing import TYPE_CHECKING, Any
+
+from homeassistant.components.recorder.models import (
+    StatisticData,
+    StatisticMeanType,
+    StatisticMetaData,
+)
+from homeassistant.components.recorder.statistics import async_add_external_statistics
+from homeassistant.const import UnitOfVolume
+from homeassistant.core import HomeAssistant, callback
+from homeassistant.exceptions import ConfigEntryAuthFailed
+from homeassistant.helpers.storage import Store
+from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
+from homeassistant.util import dt as dt_util
+from homeassistant.util.unit_conversion import VolumeConverter
+
+from .api import (
+    Device,
+    DeviceFeatures,
+    DeviceStatus,
+    HeatingSchedule,
+    NavienAuthError,
+    NavienError,
+    NavienSmartPlusClient,
+    UsageRecord,
+)
+from .const import (
+    DOMAIN,
+    LOGGER,
+    SCHEDULE_INTERVAL,
+    STATUS_INTERVAL,
+    USAGE_BACKFILL_MONTHS,
+    USAGE_INTERVAL,
+)
+
+if TYPE_CHECKING:
+    from . import NavienConfigEntry
+
+
+@dataclass
+class NavienData:
+    """Everything the entities of one module need."""
+
+    status: DeviceStatus
+    features: DeviceFeatures
+    schedules: dict[int, HeatingSchedule]
+
+
+class NavienCoordinator(DataUpdateCoordinator[NavienData]):
+    """Polls status for one BCM module and applies pushed updates."""
+
+    config_entry: NavienConfigEntry
+
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        entry: NavienConfigEntry,
+        client: NavienSmartPlusClient,
+        device: Device,
+    ) -> None:
+        super().__init__(
+            hass,
+            LOGGER,
+            config_entry=entry,
+            name=f"{DOMAIN} {device.device_id}",
+            update_interval=STATUS_INTERVAL,
+        )
+        self.client = client
+        self.device = device
+        self._schedules_at: datetime | None = None
+
+    async def _async_update_data(self) -> NavienData:
+        previous = self.data
+        try:
+            features = previous.features if previous else await self.client.async_get_features(self.device)
+            status = await self.client.async_get_status(self.device)
+            schedules = previous.schedules if previous else {}
+            if self._schedule_due(status):
+                schedules = await self.client.async_get_heating_schedules(self.device)
+                self._schedules_at = dt_util.utcnow()
+        except NavienAuthError as err:
+            raise ConfigEntryAuthFailed(str(err)) from err
+        except NavienError as err:
+            raise UpdateFailed(str(err)) from err
+        return NavienData(status=status, features=features, schedules=schedules)
+
+    def _schedule_due(self, status: DeviceStatus) -> bool:
+        """Refresh the schedule periodically, or as soon as a zone moves to another slot."""
+        if self.data is None or self._schedules_at is None:
+            return True
+        if dt_util.utcnow() - self._schedules_at > SCHEDULE_INTERVAL:
+            return True
+        previous = {z.zone_id: z.program_number for z in self.data.status.zones.values()}
+        return any(previous.get(z.zone_id) != z.program_number for z in status.zones.values())
+
+    @callback
+    def async_handle_status(self, device: Device, status: DeviceStatus) -> None:
+        """Status pushed over MQTT: replies to other clients of this account, such as the app."""
+        if device.device_id == self.device.device_id:
+            self.async_apply_status(status)
+
+    @callback
+    def async_apply_status(self, status: DeviceStatus | None) -> None:
+        """Show a newer status straight away (pushed, or returned by a control command)."""
+        if status is not None and self.data is not None:
+            self.async_set_updated_data(replace(self.data, status=status))
+
+
+USAGE_STATISTICS = {
+    # statistic suffix -> (UsageRecord attribute, name)
+    "heating_gas": ("heating_usage", "heating gas"),
+    "hot_water_gas": ("hot_water_usage", "hot water gas"),
+    "total_gas": ("total_usage", "total gas"),
+}
+
+
+class NavienUsageCoordinator(DataUpdateCoordinator[UsageRecord]):
+    """Hourly fuel use: the year-to-date total for sensors, and daily history imported as long-term statistics.
+
+    The year's monthly totals cost one request per hour. Daily records are fetched only when a month's total no
+    longer matches the cached days, which happens once a day when the module fills in the day that just ended.
+    """
+
+    config_entry: NavienConfigEntry
+
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        entry: NavienConfigEntry,
+        client: NavienSmartPlusClient,
+        device: Device,
+    ) -> None:
+        super().__init__(
+            hass,
+            LOGGER,
+            config_entry=entry,
+            name=f"{DOMAIN} usage {device.device_id}",
+            update_interval=USAGE_INTERVAL,
+        )
+        self.client = client
+        self.device = device
+        # Every finished day since the backfill started, kept on disk so statistics sums always start from the
+        # same day.
+        self._store = usage_store(hass, device.device_id)
+        self._days: dict[date, UsageRecord] | None = None
+
+    async def _async_update_data(self) -> UsageRecord:
+        today = dt_util.now().date()
+        changed_since: date | None = None
+        try:
+            if self._days is None:
+                stored = await self._store.async_load() or {}
+                self._days = {date.fromisoformat(k): UsageRecord(**v) for k, v in stored.get("days", {}).items()}
+                if not self._days:
+                    changed_since = await self._fetch_days(_months_back(today, USAGE_BACKFILL_MONTHS), today)
+            monthly = await self.client.async_get_monthly_usage(self.device, today.year)
+            # Last month too for the first few days, while its final days are still being filled in.
+            for year, month in _months_back(today, 2 if today.day <= 3 else 1):
+                if self._cached_month_matches(year, month, monthly):
+                    continue
+                if (since := await self._fetch_days([(year, month)], today)) is not None:
+                    changed_since = min(changed_since or since, since)
+        except NavienAuthError as err:
+            raise ConfigEntryAuthFailed(str(err)) from err
+        except NavienError as err:
+            raise UpdateFailed(str(err)) from err
+
+        if changed_since is not None:
+            await self._store.async_save({"days": {d.isoformat(): asdict(r) for d, r in self._days.items()}})
+            self._import_statistics(changed_since)
+        return UsageRecord.year_total(today.year, monthly)
+
+    def _cached_month_matches(self, year: int, month: int, monthly: list[UsageRecord]) -> bool:
+        """Whether the cached days add up to the module's total for that month (only known for this year)."""
+        assert self._days is not None
+        total = next((r for r in monthly if (r.year, r.month) == (year, month)), None)
+        if total is None:
+            return False
+        cached = UsageRecord.year_total(year, [r for d, r in self._days.items() if (d.year, d.month) == (year, month)])
+        return (cached.heating_usage, cached.hot_water_usage) == (total.heating_usage, total.hot_water_usage)
+
+    async def _fetch_days(self, months: list[tuple[int, int]], today: date) -> date | None:
+        """Fetch the finished days of the given months into the cache. Returns the earliest day that changed."""
+        assert self._days is not None
+        earliest: date | None = None
+        for year, month in months:
+            for record in await self.client.async_get_daily_usage(self.device, year, month):
+                day = record.date
+                if day >= today:
+                    continue  # not finished yet; reads 0 until the day is over
+                if self._days.get(day) != record:
+                    self._days[day] = record
+                    earliest = min(earliest or day, day)
+        return earliest
+
+    def _import_statistics(self, since: date) -> None:
+        """Write one statistic row per finished day from `since`, at local midnight, with sums from the first day."""
+        assert self._days is not None
+        days = sorted(self._days.items())
+        starts = {day: dt_util.start_of_local_day(day) for day, _ in days if day >= since}
+        for suffix, (attr, label) in USAGE_STATISTICS.items():
+            running = 0.0
+            rows: list[StatisticData] = []
+            for day, record in days:
+                value = float(getattr(record, attr))
+                running += value
+                if day in starts:
+                    rows.append(StatisticData(start=starts[day], state=value, sum=running))
+            metadata = StatisticMetaData(
+                mean_type=StatisticMeanType.NONE,
+                has_sum=True,
+                name=f"Navien {label}",
+                source=DOMAIN,
+                statistic_id=usage_statistic_id(self.device.mac, suffix),
+                unit_class=VolumeConverter.UNIT_CLASS,
+                unit_of_measurement=UnitOfVolume.CUBIC_METERS,
+            )
+            async_add_external_statistics(self.hass, metadata, rows)
+        LOGGER.debug("Imported %s days of gas statistics from %s", len(starts), since)
+
+
+def _months_back(today: date, count: int) -> list[tuple[int, int]]:
+    """The last `count` (year, month) pairs ending with today's month, oldest first."""
+    months = []
+    year, month = today.year, today.month
+    for _ in range(count):
+        months.append((year, month))
+        month -= 1
+        if month == 0:
+            year, month = year - 1, 12
+    return list(reversed(months))
+
+
+def usage_statistic_id(mac: str, suffix: str) -> str:
+    return f"{DOMAIN}:{mac}_{suffix}"
+
+
+def usage_store(hass: HomeAssistant, device_id: str) -> Store[dict[str, Any]]:
+    return Store(hass, 1, f"{DOMAIN}.usage.{device_id}")

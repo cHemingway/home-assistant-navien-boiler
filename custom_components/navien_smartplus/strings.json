@@ -1,0 +1,81 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Sign in to Navien Smart Plus",
+        "description": "Use the email address and password you sign in to the Navien Smart Plus app with.",
+        "data": {
+          "email": "[%key:common::config_flow::data::email%]",
+          "password": "[%key:common::config_flow::data::password%]"
+        }
+      },
+      "reauth_confirm": {
+        "title": "[%key:common::config_flow::title::reauth%]",
+        "description": "Enter the Navien Smart Plus password for {email}.",
+        "data": {
+          "password": "[%key:common::config_flow::data::password%]"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "[%key:common::config_flow::error::invalid_auth%]",
+      "cannot_connect": "[%key:common::config_flow::error::cannot_connect%]",
+      "no_devices": "This account has no Smart Plus devices.",
+      "unknown": "[%key:common::config_flow::error::unknown%]"
+    },
+    "abort": {
+      "already_configured": "[%key:common::config_flow::abort::already_configured_account%]",
+      "reauth_successful": "[%key:common::config_flow::abort::reauth_successful%]",
+      "wrong_account": "That password signs in to a different Navien account."
+    }
+  },
+  "entity": {
+    "binary_sensor": {
+      "burner": { "name": "Burner" },
+      "hot_water_active": { "name": "Hot water running" },
+      "fault": { "name": "Fault" }
+    },
+    "climate": {
+      "zone": {
+        "state_attributes": {
+          "preset_mode": {
+            "state": {
+              "none": "None",
+              "boost": "Boost",
+              "override": "Override"
+            }
+          }
+        }
+      }
+    },
+    "sensor": {
+      "outdoor_temperature": { "name": "Outdoor temperature" },
+      "error_code": { "name": "Error code" },
+      "heating_gas": { "name": "Heating gas this year" },
+      "hot_water_gas": { "name": "Hot water gas this year" },
+      "total_gas": { "name": "Gas this year" },
+      "heating_hours": { "name": "Heating burner hours this year" },
+      "hot_water_hours": { "name": "Hot water burner hours this year" }
+    },
+    "switch": {
+      "holiday": { "name": "Holiday mode" },
+      "holiday_zone": { "name": "Holiday mode {zone}" }
+    },
+    "water_heater": {
+      "hot_water": {
+        "name": "Hot water",
+        "state": {
+          "auto": "Schedule",
+          "on": "On",
+          "boost": "Boost",
+          "off": "Off"
+        }
+      }
+    }
+  },
+  "exceptions": {
+    "zone_off": {
+      "message": "{zone} is off. Switch it to Auto or Heat before setting a temperature."
+    }
+  }
+}

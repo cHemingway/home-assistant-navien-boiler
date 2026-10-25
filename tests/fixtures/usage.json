@@ -1,0 +1,381 @@
+{
+ "daily_2026_10": [
+  {
+   "year": 2026,
+   "month": 10,
+   "day": 1,
+   "heatUsage": 0,
+   "dhwUsage": 0,
+   "heatTime": 0,
+   "dhwTime": 0
+  },
+  {
+   "year": 2026,
+   "month": 10,
+   "day": 2,
+   "heatUsage": 0,
+   "dhwUsage": 1,
+   "heatTime": 0,
+   "dhwTime": 1
+  },
+  {
+   "year": 2026,
+   "month": 10,
+   "day": 3,
+   "heatUsage": 0,
+   "dhwUsage": 1,
+   "heatTime": 0,
+   "dhwTime": 0
+  },
+  {
+   "year": 2026,
+   "month": 10,
+   "day": 4,
+   "heatUsage": 0,
+   "dhwUsage": 0,
+   "heatTime": 0,
+   "dhwTime": 0
+  },
+  {
+   "year": 2026,
+   "month": 10,
+   "day": 5,
+   "heatUsage": 0,
+   "dhwUsage": 1,
+   "heatTime": 0,
+   "dhwTime": 0
+  },
+  {
+   "year": 2026,
+   "month": 10,
+   "day": 6,
+   "heatUsage": 0,
+   "dhwUsage": 0,
+   "heatTime": 0,
+   "dhwTime": 1
+  },
+  {
+   "year": 2026,
+   "month": 10,
+   "day": 7,
+   "heatUsage": 0,
+   "dhwUsage": 1,
+   "heatTime": 0,
+   "dhwTime": 0
+  },
+  {
+   "year": 2026,
+   "month": 10,
+   "day": 8,
+   "heatUsage": 0,
+   "dhwUsage": 1,
+   "heatTime": 0,
+   "dhwTime": 0
+  },
+  {
+   "year": 2026,
+   "month": 10,
+   "day": 9,
+   "heatUsage": 0,
+   "dhwUsage": 0,
+   "heatTime": 0,
+   "dhwTime": 1
+  },
+  {
+   "year": 2026,
+   "month": 10,
+   "day": 10,
+   "heatUsage": 0,
+   "dhwUsage": 2,
+   "heatTime": 0,
+   "dhwTime": 0
+  },
+  {
+   "year": 2026,
+   "month": 10,
+   "day": 11,
+   "heatUsage": 0,
+   "dhwUsage": 1,
+   "heatTime": 0,
+   "dhwTime": 1
+  },
+  {
+   "year": 2026,
+   "month": 10,
+   "day": 12,
+   "heatUsage": 0,
+   "dhwUsage": 0,
+   "heatTime": 0,
+   "dhwTime": 0
+  },
+  {
+   "year": 2026,
+   "month": 10,
+   "day": 13,
+   "heatUsage": 0,
+   "dhwUsage": 1,
+   "heatTime": 0,
+   "dhwTime": 0
+  },
+  {
+   "year": 2026,
+   "month": 10,
+   "day": 14,
+   "heatUsage": 0,
+   "dhwUsage": 1,
+   "heatTime": 0,
+   "dhwTime": 1
+  },
+  {
+   "year": 2026,
+   "month": 10,
+   "day": 15,
+   "heatUsage": 0,
+   "dhwUsage": 1,
+   "heatTime": 0,
+   "dhwTime": 0
+  },
+  {
+   "year": 2026,
+   "month": 10,
+   "day": 16,
+   "heatUsage": 0,
+   "dhwUsage": 1,
+   "heatTime": 0,
+   "dhwTime": 0
+  },
+  {
+   "year": 2026,
+   "month": 10,
+   "day": 17,
+   "heatUsage": 0,
+   "dhwUsage": 0,
+   "heatTime": 0,
+   "dhwTime": 0
+  },
+  {
+   "year": 2026,
+   "month": 10,
+   "day": 18,
+   "heatUsage": 1,
+   "dhwUsage": 0,
+   "heatTime": 1,
+   "dhwTime": 0
+  },
+  {
+   "year": 2026,
+   "month": 10,
+   "day": 19,
+   "heatUsage": 2,
+   "dhwUsage": 0,
+   "heatTime": 0,
+   "dhwTime": 0
+  },
+  {
+   "year": 2026,
+   "month": 10,
+   "day": 20,
+   "heatUsage": 0,
+   "dhwUsage": 1,
+   "heatTime": 1,
+   "dhwTime": 1
+  },
+  {
+   "year": 2026,
+   "month": 10,
+   "day": 21,
+   "heatUsage": 2,
+   "dhwUsage": 1,
+   "heatTime": 1,
+   "dhwTime": 0
+  },
+  {
+   "year": 2026,
+   "month": 10,
+   "day": 22,
+   "heatUsage": 2,
+   "dhwUsage": 0,
+   "heatTime": 1,
+   "dhwTime": 0
+  },
+  {
+   "year": 2026,
+   "month": 10,
+   "day": 23,
+   "heatUsage": 1,
+   "dhwUsage": 2,
+   "heatTime": 1,
+   "dhwTime": 1
+  },
+  {
+   "year": 2026,
+   "month": 10,
+   "day": 24,
+   "heatUsage": 2,
+   "dhwUsage": 1,
+   "heatTime": 1,
+   "dhwTime": 0
+  },
+  {
+   "year": 2026,
+   "month": 10,
+   "day": 25,
+   "heatUsage": 0,
+   "dhwUsage": 0,
+   "heatTime": 0,
+   "dhwTime": 0
+  },
+  {
+   "year": 2026,
+   "month": 10,
+   "day": 26,
+   "heatUsage": 0,
+   "dhwUsage": 0,
+   "heatTime": 0,
+   "dhwTime": 0
+  },
+  {
+   "year": 2026,
+   "month": 10,
+   "day": 27,
+   "heatUsage": 0,
+   "dhwUsage": 0,
+   "heatTime": 0,
+   "dhwTime": 0
+  },
+  {
+   "year": 2026,
+   "month": 10,
+   "day": 28,
+   "heatUsage": 0,
+   "dhwUsage": 0,
+   "heatTime": 0,
+   "dhwTime": 0
+  },
+  {
+   "year": 2026,
+   "month": 10,
+   "day": 29,
+   "heatUsage": 0,
+   "dhwUsage": 0,
+   "heatTime": 0,
+   "dhwTime": 0
+  },
+  {
+   "year": 2026,
+   "month": 10,
+   "day": 30,
+   "heatUsage": 0,
+   "dhwUsage": 0,
+   "heatTime": 0,
+   "dhwTime": 0
+  },
+  {
+   "year": 2026,
+   "month": 10,
+   "day": 31,
+   "heatUsage": 0,
+   "dhwUsage": 0,
+   "heatTime": 0,
+   "dhwTime": 0
+  }
+ ],
+ "monthly_2026": [
+  {
+   "year": 2026,
+   "month": 1,
+   "heatUsage": 113,
+   "dhwUsage": 28,
+   "heatTime": 74,
+   "dhwTime": 9
+  },
+  {
+   "year": 2026,
+   "month": 2,
+   "heatUsage": 68,
+   "dhwUsage": 28,
+   "heatTime": 43,
+   "dhwTime": 10
+  },
+  {
+   "year": 2026,
+   "month": 3,
+   "heatUsage": 47,
+   "dhwUsage": 27,
+   "heatTime": 31,
+   "dhwTime": 10
+  },
+  {
+   "year": 2026,
+   "month": 4,
+   "heatUsage": 10,
+   "dhwUsage": 22,
+   "heatTime": 6,
+   "dhwTime": 9
+  },
+  {
+   "year": 2026,
+   "month": 5,
+   "heatUsage": 4,
+   "dhwUsage": 20,
+   "heatTime": 3,
+   "dhwTime": 8
+  },
+  {
+   "year": 2026,
+   "month": 6,
+   "heatUsage": 0,
+   "dhwUsage": 14,
+   "heatTime": 0,
+   "dhwTime": 6
+  },
+  {
+   "year": 2026,
+   "month": 7,
+   "heatUsage": 0,
+   "dhwUsage": 14,
+   "heatTime": 0,
+   "dhwTime": 8
+  },
+  {
+   "year": 2026,
+   "month": 8,
+   "heatUsage": 0,
+   "dhwUsage": 13,
+   "heatTime": 0,
+   "dhwTime": 7
+  },
+  {
+   "year": 2026,
+   "month": 9,
+   "heatUsage": 0,
+   "dhwUsage": 19,
+   "heatTime": 0,
+   "dhwTime": 8
+  },
+  {
+   "year": 2026,
+   "month": 10,
+   "heatUsage": 10,
+   "dhwUsage": 17,
+   "heatTime": 6,
+   "dhwTime": 7
+  },
+  {
+   "year": 2026,
+   "month": 11,
+   "heatUsage": 0,
+   "dhwUsage": 0,
+   "heatTime": 0,
+   "dhwTime": 0
+  },
+  {
+   "year": 2026,
+   "month": 12,
+   "heatUsage": 0,
+   "dhwUsage": 0,
+   "heatTime": 0,
+   "dhwTime": 0
+  }
+ ]
+}
