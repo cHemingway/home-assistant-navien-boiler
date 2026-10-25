@@ -1,6 +1,7 @@
 {
   "domain": "navien_smartplus",
   "name": "Navien Smart Plus",
+  "categories": ["climate.thermostats_heating", "climate.water_heaters"],
   "codeowners": [
     "@cHemingway"
   ],
