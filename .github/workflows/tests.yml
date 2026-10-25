@@ -13,8 +13,9 @@ jobs:
       - uses: astral-sh/setup-uv@v6
         with:
           python-version: "3.14"
+          activate-environment: true
       - name: Install
-        run: uv pip install --system -r requirements_test.txt
+        run: uv pip install -r requirements_test.txt
       - name: Lint
         run: ruff check .
       - name: Translations up to date
