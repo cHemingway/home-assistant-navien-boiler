@@ -3,11 +3,16 @@
 An unofficial Home Assistant integration (installable with HACS) for UK Navien boilers controlled by the
 **Navien Smart Plus** thermostat system and app (`com.navien.thermostat.gb`).
 
-> **Status: early release.** Tested on one system: a gas combi, one zone, BCM-41RW. Status, setpoint control,
-> the heating schedule and gas history are confirmed against it. Holiday mode and the hot water modes are built
-> the way the app sends them but haven't been tried on real hardware yet.
+> **Status: early release.** Tested on one system: a gas combi with one zone and a BCM-41RW module. Confirmed on
+> it: status, the heating schedule, gas history, setpoint changes and overrides, Boost, holiday mode, live updates
+> from changes made on the thermostat, and reconnecting after the connection drops. Not tried on real hardware
+> yet: changing the hot water mode (so that entity starts disabled), switching a zone to Off, and systems with
+> more zones or other boilers. See the [test log](docs/protocol.md#test-log).
 
 ## Installation
+
+You need Home Assistant 2026.3 or later and a Navien Smart Plus account in the UK; the integration uses Navien's UK
+cloud.
 
 1. In HACS, open the menu → **Custom repositories**, add `https://github.com/cHemingway/home-assistant-navien-boiler`
    with type **Integration**.
@@ -26,14 +31,15 @@ One device per Smart Plus module, with:
 |---|---|
 | Climate, one per zone | Auto (follows the schedule), Heat (manual), Off. Changing the temperature in Auto starts an **Override** until the next program slot, as on the thermostat. Presets: Boost, Override. In Auto the target shown is the schedule's current temperature, as in the app. |
 | Water heater "Hot water" | Hot water mode: Schedule, On, Boost (once), Off. The combi doesn't report water temperatures. **Disabled by default**: changing the mode hasn't been tried on real hardware yet. Enable it under the device's entities to try it. |
-| Switch "Holiday mode" | Holiday (away) mode per zone. |
+| Switch "Holiday mode" | Holiday (away) mode per zone. While it's on, the zone holds its frost-protection temperature (4 °C on the tested system), and the climate entity shows that as its target, as the app does. |
 | Binary sensors | Burner on, hot water running, fault. Diagnostic: Online (the module's link to Navien's cloud) and, per zone, Thermostat connection (its radio link to the module). |
 | Sensors | Outdoor temperature (when weather is set up in the app). Diagnostic: Error code, shown as the boiler's code and description, e.g. "E302 Low water pressure", from Navien's manuals. |
 | Gas sensors | Heating, hot water and total gas **this year** in m³, plus burner hours (disabled by default). |
 
 Updates are pushed: the boiler's module reports every change within seconds, whether it's made in Home
 Assistant, the Smart Plus app or on the thermostat, including each 0.5 °C change in room temperature. Status is
-also polled every 10 minutes as a safety net.
+also polled every 10 minutes as a safety net. If the connection to Navien's cloud drops, the integration
+reconnects straight away.
 
 ### Energy dashboard
 
@@ -46,9 +52,15 @@ The boiler reports gas use **per day, in whole m³** (about 11 kWh), and only on
 
 ## Supported hardware
 
+Built for the UK Smart Plus system:
 - BCM-41RW / BCM-45RW wireless communication module
 - NRC-10R wireless thermostats (up to 3 zones), VCU-10R wiring centre
 - Navien LCB700 (oil) and NCB-CE / NCB300 / NCB500 / NCB700 (gas) boilers
+
+Only a gas combi with one NRC-10R thermostat and a BCM-41RW has been tested. The rest use the same app and cloud,
+so they should work, but more zones and the wiring centre are untested. Oil boilers probably report fuel in
+litres, which the integration doesn't handle yet: it labels all fuel use as m³ of gas. Reports from other
+systems are welcome as GitHub issues.
 
 The US NaviLink products (NPE/NCB water heaters, NWP500) use a different cloud region and app. See the related
 projects below.
