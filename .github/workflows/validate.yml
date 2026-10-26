@@ -14,6 +14,33 @@ jobs:
       - uses: actions/checkout@v4
       - uses: home-assistant/actions/hassfest@master
 
+  pylint:
+    # Home Assistant's pylint checkers only understand Core's layout, so lint the integration as if it were in Core.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: integration
+      - uses: actions/checkout@v4
+        with:
+          repository: home-assistant/core
+          ref: dev
+          path: core
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.14"
+          activate-environment: true
+      - name: Install pylint at Core's pinned versions
+        run: |
+          grep -E '^(pylint|astroid|pylint-per-file-ignores)==' core/requirements_test.txt > pylint-requirements.txt
+          cat pylint-requirements.txt
+          uv pip install -r pylint-requirements.txt
+      - name: Copy the integration into Core
+        run: cp -r integration/custom_components/navien_smartplus core/homeassistant/components/
+      - name: Pylint
+        working-directory: core
+        run: pylint homeassistant/components/navien_smartplus
+
   hacs:
     # The HACS action can only validate public repositories. Scheduled runs carry no repository info, so they skip it.
     if: github.event.repository.private == false
