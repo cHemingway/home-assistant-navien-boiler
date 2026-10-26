@@ -5,7 +5,7 @@ from typing import Any
 import uuid
 
 from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
-from homeassistant.const import CONF_EMAIL, CONF_PASSWORD
+from homeassistant.const import CONF_CLIENT_ID, CONF_EMAIL, CONF_PASSWORD
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.selector import (
     TextSelector,
@@ -15,7 +15,7 @@ from homeassistant.helpers.selector import (
 import voluptuous as vol
 
 from .api import NavienAuthError, NavienError, NavienSmartPlusClient
-from .const import CONF_CLIENT_ID, DOMAIN, LOGGER
+from .const import DOMAIN, LOGGER
 
 PASSWORD_SELECTOR = TextSelector(
     TextSelectorConfig(type=TextSelectorType.PASSWORD, autocomplete="current-password")

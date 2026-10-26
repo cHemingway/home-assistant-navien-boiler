@@ -3,7 +3,7 @@
 from unittest.mock import MagicMock, patch
 
 from homeassistant.config_entries import SOURCE_USER
-from homeassistant.const import CONF_EMAIL, CONF_PASSWORD
+from homeassistant.const import CONF_CLIENT_ID, CONF_EMAIL, CONF_PASSWORD
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
 import pytest
@@ -13,7 +13,7 @@ from custom_components.navien_smartplus.api import (
     NavienAuthError,
     NavienConnectionError,
 )
-from custom_components.navien_smartplus.const import CONF_CLIENT_ID, DOMAIN
+from custom_components.navien_smartplus.const import DOMAIN
 
 USER_INPUT = {CONF_EMAIL: " user@example.com ", CONF_PASSWORD: "secret"}
 

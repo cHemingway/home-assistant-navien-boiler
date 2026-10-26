@@ -4,7 +4,7 @@ from collections.abc import Generator
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from homeassistant.const import CONF_EMAIL, CONF_PASSWORD
+from homeassistant.const import CONF_CLIENT_ID, CONF_EMAIL, CONF_PASSWORD
 import pytest
 from pytest_homeassistant_custom_component.common import (
     MockConfigEntry,
@@ -19,7 +19,7 @@ from custom_components.navien_smartplus.api import (
     HeatingSchedule,
     UsageRecord,
 )
-from custom_components.navien_smartplus.const import CONF_CLIENT_ID, DOMAIN
+from custom_components.navien_smartplus.const import DOMAIN
 
 
 def load_fixture(name: str) -> Any:

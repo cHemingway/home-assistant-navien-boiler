@@ -4,14 +4,14 @@ from dataclasses import dataclass
 
 from homeassistant.components.recorder import get_instance
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import CONF_EMAIL, CONF_PASSWORD, Platform
+from homeassistant.const import CONF_CLIENT_ID, CONF_EMAIL, CONF_PASSWORD, Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.util.ssl import get_default_context
 
 from .api import NavienAuthError, NavienError, NavienSmartPlusClient
-from .const import CONF_CLIENT_ID, CONF_DEVICE_MACS, DOMAIN
+from .const import CONF_DEVICE_MACS, DOMAIN
 from .coordinator import (
     USAGE_STATISTICS,
     NavienCoordinator,

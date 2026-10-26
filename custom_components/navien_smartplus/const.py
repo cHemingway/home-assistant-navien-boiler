@@ -6,7 +6,6 @@ import logging
 DOMAIN = "navien_smartplus"
 LOGGER = logging.getLogger(__package__)
 
-CONF_CLIENT_ID = "client_id"
 CONF_DEVICE_MACS = "device_macs"
 
 MANUFACTURER = "Navien"

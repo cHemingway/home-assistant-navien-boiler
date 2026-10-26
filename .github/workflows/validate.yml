@@ -30,11 +30,11 @@ jobs:
         with:
           python-version: "3.14"
           activate-environment: true
-      - name: Install pylint at Core's pinned versions
+      - name: Install pylint at Core's pinned versions, and Core's pylint plugin
         run: |
           grep -E '^(pylint|astroid|pylint-per-file-ignores)==' core/requirements_test.txt > pylint-requirements.txt
           cat pylint-requirements.txt
-          uv pip install -r pylint-requirements.txt
+          uv pip install -r pylint-requirements.txt ./core/packages/pylint-home-assistant
       - name: Copy the integration into Core
         run: cp -r integration/custom_components/navien_smartplus core/homeassistant/components/
       - name: Pylint

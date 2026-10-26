@@ -4,11 +4,11 @@ from dataclasses import asdict
 from typing import Any
 
 from homeassistant.components.diagnostics import async_redact_data
-from homeassistant.const import CONF_EMAIL, CONF_PASSWORD
+from homeassistant.const import CONF_CLIENT_ID, CONF_EMAIL, CONF_PASSWORD
 from homeassistant.core import HomeAssistant
 
 from . import NavienConfigEntry
-from .const import CONF_CLIENT_ID, CONF_DEVICE_MACS
+from .const import CONF_DEVICE_MACS
 
 TO_REDACT = {
     CONF_EMAIL,
