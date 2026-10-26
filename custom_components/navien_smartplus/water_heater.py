@@ -48,6 +48,8 @@ class NavienHotWater(NavienEntity, WaterHeaterEntity):
     """Hot water mode. The combi reports no water temperatures, so this only switches modes."""
 
     _attr_translation_key = "hot_water"
+    # Changing the hot water mode hasn't been tried on real hardware yet, so it starts disabled.
+    _attr_entity_registry_enabled_default = False
     _attr_temperature_unit = UnitOfTemperature.CELSIUS
     _attr_operation_list = [OPERATION_AUTO, STATE_ON, OPERATION_BOOST, STATE_OFF]
     _attr_supported_features = (

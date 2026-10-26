@@ -27,6 +27,7 @@ from homeassistant.const import (
 )
 from homeassistant.core import CoreState, HomeAssistant
 from homeassistant.exceptions import ServiceValidationError
+from homeassistant.helpers import entity_registry as er
 from homeassistant.util import dt as dt_util
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
@@ -40,6 +41,7 @@ from custom_components.navien_smartplus.api import (
     NavienAuthError,
     NavienConnectionError,
 )
+from custom_components.navien_smartplus.const import DOMAIN
 
 from .conftest import fixture_status
 
@@ -55,9 +57,23 @@ async def london_sunday_evening(
     freezer.move_to("2026-10-25 20:05:00+00:00")
 
 
-async def setup_entry(hass: HomeAssistant, entry: MockConfigEntry) -> None:
-    """Add the entry and wait for setup to finish."""
+def enable_hot_water(hass: HomeAssistant, entry: MockConfigEntry) -> None:
+    """Enable the hot water entity, which starts disabled, the way a user would."""
     entry.add_to_hass(hass)
+    er.async_get(hass).async_get_or_create(
+        "water_heater",
+        DOMAIN,
+        "001122334455abcd_hot_water",
+        config_entry=entry,
+        suggested_object_id="navien_boiler_hot_water",
+        disabled_by=None,
+    )
+
+
+async def setup_entry(hass: HomeAssistant, entry: MockConfigEntry) -> None:
+    """Add the entry (unless a test already did) and wait for setup to finish."""
+    if hass.config_entries.async_get_entry(entry.entry_id) is None:
+        entry.add_to_hass(hass)
     await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
 
@@ -81,7 +97,6 @@ async def test_setup_and_entities(
     assert climate.attributes["hvac_action"] == "idle"
 
     assert hass.states.get("sensor.navien_boiler_outdoor_temperature").state == "9.2"
-    assert hass.states.get("water_heater.navien_boiler_hot_water").state == "auto"
     assert hass.states.get("binary_sensor.navien_boiler_burner").state == "off"
     assert hass.states.get("binary_sensor.navien_boiler_fault").state == "off"
     assert hass.states.get("switch.navien_boiler_holiday_mode").state == "off"
@@ -193,6 +208,7 @@ async def test_hot_water_service(
     hass: HomeAssistant, mock_client: MagicMock, config_entry: MockConfigEntry
 ) -> None:
     """Setting the hot water mode sends the matching command."""
+    enable_hot_water(hass, config_entry)
     await setup_entry(hass, config_entry)
     await hass.services.async_call(
         WATER_HEATER_DOMAIN,
@@ -389,3 +405,16 @@ async def test_error_code_sensor(
     assert state.attributes["code"] == "E302"
     assert state.attributes["sub_error_code"] == 1
     assert hass.states.get("binary_sensor.navien_boiler_fault").state == "on"
+
+
+async def test_hot_water_disabled_by_default(
+    hass: HomeAssistant, mock_client: MagicMock, config_entry: MockConfigEntry
+) -> None:
+    """Hot water control is untested on hardware, so its entity starts disabled."""
+    await setup_entry(hass, config_entry)
+    entity = er.async_get(hass).async_get("water_heater.navien_boiler_hot_water")
+    assert entity.disabled_by is er.RegistryEntryDisabler.INTEGRATION
+    assert hass.states.get("water_heater.navien_boiler_hot_water") is None
+    assert (
+        hass.states.get("binary_sensor.navien_boiler_hot_water_running").state == "off"
+    )
