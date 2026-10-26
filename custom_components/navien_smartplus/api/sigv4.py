@@ -24,7 +24,8 @@ def presign_mqtt_path(
     now: datetime | None = None,
 ) -> str:
     """Return `/mqtt?...` with SigV4 query auth. The session token is appended after signing, as IoT requires."""
-    now = now or datetime.now(UTC)
+    # api/ stays free of Home Assistant imports, so it can't use homeassistant.util.dt.
+    now = now or datetime.now(UTC)  # pylint: disable=home-assistant-enforce-utcnow
     amz_date = now.strftime("%Y%m%dT%H%M%SZ")
     date_stamp = now.strftime("%Y%m%d")
     scope = f"{date_stamp}/{region}/{service}/aws4_request"

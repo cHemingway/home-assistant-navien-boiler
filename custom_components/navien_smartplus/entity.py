@@ -7,7 +7,6 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.device_registry import (
     CONNECTION_NETWORK_MAC,
     DeviceInfo,
-    format_mac,
 )
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
@@ -20,7 +19,7 @@ def device_info(device: Device, data: NavienData | None = None) -> DeviceInfo:
     """Device registry details for a module."""
     info = DeviceInfo(
         identifiers={(DOMAIN, device.device_id)},
-        connections={(CONNECTION_NETWORK_MAC, format_mac(device.mac))},
+        connections={(CONNECTION_NETWORK_MAC, device.mac)},
         manufacturer=MANUFACTURER,
         model="Smart Plus",
         model_id="BCM-41RW",

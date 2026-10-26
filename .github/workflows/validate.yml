@@ -39,7 +39,9 @@ jobs:
         run: cp -r integration/custom_components/navien_smartplus core/homeassistant/components/
       - name: Pylint
         working-directory: core
-        run: pylint homeassistant/components/navien_smartplus
+        # home-assistant-return-type wants async_setup_entry to return None, a Core dev change; released
+        # Home Assistant still fails a setup that doesn't return a boolean.
+        run: pylint --disable=home-assistant-return-type homeassistant/components/navien_smartplus
 
   hacs:
     # The HACS action can only validate public repositories. Scheduled runs carry no repository info, so they skip it.
