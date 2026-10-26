@@ -58,6 +58,25 @@ m³** (about 11 kWh), and only once the day is over. Yesterday and earlier days 
 The "… gas this year" sensors can be used as the gas source instead, but they only count from the day you add
 them. Pick one or the other, not both, or your gas will be counted twice.
 
+**Already have a gas meter in Energy?** Don't add the boiler as well. Energy adds gas sources together, and the
+meter already includes everything the boiler burns, so the boiler's gas would be counted twice. Keep the meter as
+your gas source and show the boiler's share on a dashboard with a **Statistics graph** card instead: pick
+**Navien heating gas** and **Navien hot water gas** (or **Navien total gas**), with the statistic *Change*, the
+period *Month* or *Day*, and the chart type *Bar*. In YAML (the IDs end in your module's MAC address):
+
+```yaml
+type: statistics-graph
+title: Boiler gas
+entities:
+  - navien_smartplus:001122334455_heating_gas
+  - navien_smartplus:001122334455_hot_water_gas
+stat_types:
+  - change
+chart_type: bar
+period: month
+days_to_show: 365
+```
+
 ## Supported hardware
 
 Built for the UK Smart Plus system:
