@@ -43,12 +43,20 @@ reconnects straight away.
 
 ### Energy dashboard
 
-The boiler reports gas use **per day, in whole m³** (about 11 kWh), and only once the day is over. So:
-- On setup, the integration imports up to **13 months of daily history** as long-term statistics named
-  **Navien heating gas**, **Navien hot water gas** and **Navien total gas**. Add **Navien total gas** under
-  *Settings → Dashboards → Energy → Gas consumption* to see past days on the right dates.
-- The "… gas this year" sensors also work in the Energy dashboard, but only from the day you add them, and they
-  update with about a day's delay.
+On setup, the integration imports up to **13 months of daily gas history** as long-term statistics named
+**Navien heating gas**, **Navien hot water gas** and **Navien total gas**. Home Assistant doesn't add these to the
+Energy dashboard by itself. To see them:
+
+1. Go to **Settings → Dashboards → Energy**, open the **Gas** tab and select **Add gas source**.
+2. Under *Gas consumption*, pick **Navien total gas** (listed under *Navien Smart Plus*), then **Save**.
+3. Open **Energy** in the sidebar and choose a longer period, e.g. **This month** or **Last 12 months**, from the
+   date picker at the bottom.
+
+The Energy dashboard opens on **today**, which always shows 0 m³: the boiler reports gas use **per day, in whole
+m³** (about 11 kWh), and only once the day is over. Yesterday and earlier days show up on their dates.
+
+The "… gas this year" sensors can be used as the gas source instead, but they only count from the day you add
+them. Pick one or the other, not both, or your gas will be counted twice.
 
 ## Supported hardware
 
