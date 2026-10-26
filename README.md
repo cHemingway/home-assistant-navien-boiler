@@ -31,8 +31,9 @@ One device per Smart Plus module, with:
 | Sensors | Outdoor temperature (when weather is set up in the app). Diagnostic: Error code, shown as the boiler's code and description, e.g. "E302 Low water pressure", from Navien's manuals. |
 | Gas sensors | Heating, hot water and total gas **this year** in m³, plus burner hours (disabled by default). |
 
-Status is polled every minute. The integration also hears the cloud's replies to the Smart Plus app, so changes
-made in the app usually show up straight away. Changes made on the thermostat itself appear at the next poll.
+Updates are pushed: the boiler's module reports every change within seconds, whether it's made in Home
+Assistant, the Smart Plus app or on the thermostat, including each 0.5 °C change in room temperature. Status is
+also polled every 10 minutes as a safety net.
 
 ### Energy dashboard
 

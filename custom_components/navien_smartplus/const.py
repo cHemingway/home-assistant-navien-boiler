@@ -10,7 +10,8 @@ CONF_DEVICE_MACS = "device_macs"
 
 MANUFACTURER = "Navien"
 
-STATUS_INTERVAL = timedelta(seconds=60)
+# The module pushes every change, so polling is only a safety net for a missed push or a stalled connection.
+STATUS_INTERVAL = timedelta(minutes=10)
 SCHEDULE_INTERVAL = timedelta(minutes=30)
 USAGE_INTERVAL = timedelta(hours=1)
 
