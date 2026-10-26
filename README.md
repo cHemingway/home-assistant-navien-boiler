@@ -77,6 +77,16 @@ for the full protocol.
 The Smart Plus backend is from the same family as Navien's US **NaviLink** cloud, with UK hostnames, a different
 device prefix and its own command set for thermostat zones and boilers.
 
+## To do
+
+- **Move the cloud client into its own library.** Home Assistant core only accepts integrations whose protocol
+  code lives in a separate Python library on PyPI ([library requirement](https://contributors.home-assistant.io/core/integrations/concepts/#library)).
+  The client in `custom_components/navien_smartplus/api/` is already free of Home Assistant code, but it still
+  needs its own repository and PyPI release. Until then, the integration is available through HACS only.
+- Try the hot water modes and switching a zone to Off on real hardware, then enable the hot water entity by
+  default.
+- Report oil (LCB700) boiler fuel use in litres instead of m³.
+
 ## Credits
 
 The protocol was worked out from the UK Smart Plus app. The open-source NaviLink projects below documented the
