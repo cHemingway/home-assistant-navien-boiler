@@ -1,3 +1,4 @@
 pytest-homeassistant-custom-component
+freezegun
 aiomqtt>=2.5.0
 ruff
