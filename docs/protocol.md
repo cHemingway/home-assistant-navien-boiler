@@ -148,8 +148,11 @@ Subscriptions:
   family members' apps. That's how changes made elsewhere show up. Each reply topic needs its own wildcard
   subscription (`…/res`, `…/res/did`, `…/res/heat-reserv/rd`, `…/res/fuel-usage-daily-query/rd`, …).
 - Device-addressed topics: `cmd/T/nsp-M/res`, `cmd/T/nsp-M/res/did`, `cmd/T/nsp-M/res/ctrl-fail`.
-- Events: `evt/T/nsp-M/st/connection` (module online/offline), `evt/T/nsp-M/smart-diagnostic…`,
-  `evt/T/mobile/app-connection`, `evt/T/mobile/disconnect-mqtt`.
+- Events: `evt/T/nsp-M/st/connection`, `evt/T/nsp-M/smart-diagnostic…`, `evt/T/mobile/app-connection`,
+  `evt/T/mobile/disconnect-mqtt`. The connection event carries `event.connection.status`: `1` = the module went
+  offline (the app clears its data and logs "offline"), `2` = it's back online (the app re-reads device info with
+  `st/start`). It also carries `versionNumber` and `additionalValue`. That makes it the module's online signal *(not yet
+  seen live)*.
 
 ### Request envelope
 
@@ -177,6 +180,10 @@ command and are described in the sections below.
 - A rejected control command is answered on `cmd/T/nsp-M/res/ctrl-fail` with `response.failCode`.
 - Replies can arrive late or twice, including replies addressed to other clients. Ignore any `sessionID` that isn't
   pending.
+- **Unprompted status pushes**: whenever the zone or burner changes, including changes made on the thermostat
+  itself and each 0.5 °C step in room temperature, the module publishes a full status on its own `cmd/T/nsp-M/res`.
+  These carry `requestTopic` `…/st`, no `responseTopic`, and a `sessionID` that no client sent.
+  Subscribing to that topic gives live updates without polling.
 
 ### Pacing
 
@@ -247,7 +254,10 @@ Their scaling is unknown.
 - **Exceptions**:
   - `nrcConnected` and `nrcPairing` are **zone bitmasks** of connected/paired thermostats (1 = zone 1, 2 = zone 2,
     4 = zone 3; the app accepts 1–7).
-  - `boilerConnected` reads `1` while the boiler is online, so it isn't the usual 1/2 boolean *(meaning unclear)*.
+  - `boilerConnected` is never read by the app. It reads `1` while the boiler is online. By analogy with
+    `nrcConnected` and `vcmConnected` (0 here, with no wiring centre), it's probably "1 boiler linked over the KIW
+    bus" *(unverified)*. The app works out connectivity from `nrcConnected` and the module's connection event
+    instead.
 - **Temperatures**:
   - `insideTemperature`, `insideTemperatureSetting`, `freezeProtectionTemperature`: ÷2 (°C, 0.5 steps)
   - `outsideTemperature`: ÷10 (°C)
@@ -491,9 +501,21 @@ Done through the integration's own entities on a local test instance, reverting 
   returned the zone to the schedule (18 °C). The burner was still on in that first status and off by the next poll.
 - Hot water modes were left untested at the owner's request.
 
+### 2026-10-26: changes made on the thermostat (with the owner's OK)
+
+A listener, read-only and also subscribed to wildcards on the module's topics, ran while the owner changed the
+thermostat by hand. The zone started in Auto at 18 °C.
+- 18:36:45, the setpoint turned down: a status arrived unprompted on `cmd/3/nsp-M/res` within seconds, showing
+  Override (mode 4) at 16.5 °C.
+- 18:38:36, the setpoint turned back up: Override at 18.0 °C.
+- 18:39:03, the override cancelled: Auto (mode 0).
+- Two more pushes followed when the room temperature changed (19.0 → 19.5 → 19.0 °C).
+- All 9 messages in 10 minutes arrived on `cmd/T/nsp-M/res` and nothing on any other topic, so the integration's
+  existing subscription already gets these updates.
+
 ### Not yet tested on hardware
 
 - `dhw-mode` changes (including whether 2 = ONCE is a one-off boost)
 - Setting a zone to Off
 - Systems with more than one zone, a VCU-10R wiring centre, a system or regular boiler, or an oil (LCB700) boiler
-- Pushed updates when the thermostat itself is changed (rather than the app)
+- The module's connection event (going offline and back)
