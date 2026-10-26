@@ -137,6 +137,8 @@ class ZoneStatus:
     # and the real target comes from the schedule (see `target_temperature`).
     setting_temperature: float
     holiday: bool
+    # `freezeProtectionTemperature`: what the zone holds while holiday mode is on.
+    frost_temperature: float
     # Current slot of today's schedule (1-6), or 0 while still in yesterday's last slot.
     program_number: int
     # Schedule layout: 1 = 7-day, 2 = 5/2, 3 = 5/1/1.
@@ -153,6 +155,7 @@ class ZoneStatus:
             current_temperature=data.get("insideTemperature", 0) / 2,
             setting_temperature=data.get("insideTemperatureSetting", 0) / 2,
             holiday=_on(data.get("holidayUseSetting")),
+            frost_temperature=data.get("freezeProtectionTemperature", 0) / 2,
             program_number=int(data.get("heatingCurrentProgramNum") or 0),
             program_type=int(data.get("programReservationType") or 1),
             raw=data,
@@ -161,7 +164,13 @@ class ZoneStatus:
     def target_temperature(
         self, schedule: HeatingSchedule | None, now: datetime
     ) -> float:
-        """The target the app shows: the schedule's current slot in AUTO, otherwise the setting."""
+        """The target the app shows.
+
+        In holiday mode it's the frost-protection temperature, in AUTO the schedule's current slot, and
+        otherwise the setting.
+        """
+        if self.holiday:
+            return self.frost_temperature
         if self.mode == HeatingMode.AUTO and schedule is not None:
             scheduled = schedule.scheduled_temperature(
                 self.program_type, self.program_number, now

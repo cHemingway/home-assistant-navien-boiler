@@ -313,6 +313,9 @@ Changing the setpoint, as the app does, depends on the current mode:
 
 Other mode changes:
 - Cancel an override ("stop override"): `heat-mode [0]`. The zone returns to the schedule.
+- Boost: `heat-mode [3, t×2]`. It lasts **one hour** and heats to the zone's stored setting
+  (`insideTemperatureSetting`), not the temperature sent. Ending it from the app sends `heat-mode [1, t×2]`, which
+  leaves the zone in manual heating (ON).
 - The app's mode menu sends `[mode, current setpoint × 2]` for every mode. **In Auto the setpoint is ignored.**
 
 ### Hot water
@@ -333,6 +336,9 @@ water temperature (only its mode, schedule and "fast hot water"), so that's set 
 ### Holiday and other settings
 
 - Holiday on: `goout-on` (33554436), `param = [2]`. Holiday off: `goout-off` (33554435), `param = [1]`.
+  The reply's `command` is the holiday command, and the zone's `holidayUseSetting` changes. `insideOperationMode`
+  doesn't, so the zone still reads as Auto. While on, the zone holds its frost-protection temperature
+  (`freezeProtectionTemperature` ÷ 2, 4 °C on the system tested), which is what the app shows.
 - Pre-heating: `pre-heating` (33554448), `param = [2|1]` *(verify)*.
 
 ## Heating schedule
@@ -474,10 +480,20 @@ The zone started in Auto: an earlier override had ended at the 20:00 program slo
 - The usage backfill imported 389 days of daily gas statistics. The daily changes shown in Home Assistant matched
   the CLI.
 
+### 2026-10-26: holiday and Boost from Home Assistant (with the owner's OK)
+
+Done through the integration's own entities on a local test instance, reverting each change.
+- Holiday switch on, then off: `holidayUseSetting` went 1 → 2 → 1, with the zone staying in Auto throughout. The app
+  showed holiday at 4 °C, the zone's frost-protection temperature. The integration showed the schedule's 18 °C
+  instead, so it now uses the frost-protection temperature while holiday is on.
+- Boost preset: the zone went to mode 3 and called for heat. The app showed Boost for one hour at 19.5 °C, the
+  stored setting, although 18 °C was sent. Clearing the preset gave manual heating (mode 1), and setting Auto
+  returned the zone to the schedule (18 °C). The burner was still on in that first status and off by the next poll.
+- Hot water modes were left untested at the owner's request.
+
 ### Not yet tested on hardware
 
 - `dhw-mode` changes (including whether 2 = ONCE is a one-off boost)
-- Holiday on/off (`goout-on` / `goout-off`)
-- Boost and Off for a zone, and leaving Boost
+- Setting a zone to Off
 - Systems with more than one zone, a VCU-10R wiring centre, a system or regular boiler, or an oil (LCB700) boiler
 - Pushed updates when the thermostat itself is changed (rather than the app)

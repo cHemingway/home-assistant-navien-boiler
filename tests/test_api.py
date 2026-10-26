@@ -90,6 +90,10 @@ def test_auto_target_uses_schedule_not_setting() -> None:
     assert zone.target_temperature(None, now) == 19.5
     zone.mode = HeatingMode.OVERRIDE
     assert zone.target_temperature(fixture_schedules()[1], now) == 19.5
+    zone.holiday = (
+        True  # Live-checked: the app shows 4 °C, the frost-protection temperature.
+    )
+    assert zone.target_temperature(fixture_schedules()[1], now) == 4.0
 
 
 def test_usage_parsing() -> None:
