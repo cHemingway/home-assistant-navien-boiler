@@ -40,6 +40,7 @@ async def async_get_config_entry_diagnostics(
                 if data
                 else None,
                 "usage_totals": asdict(usage) if usage else None,
+                "module_online": coordinator.module_online,
             }
         )
     return async_redact_data(

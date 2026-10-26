@@ -74,6 +74,8 @@ class NavienCoordinator(DataUpdateCoordinator[NavienData]):
         self.client = client
         self.device = device
         self._schedules_at: datetime | None = None
+        # Whether the module is connected to the cloud: the REST device list at first, then its connection events.
+        self.module_online = device.is_connected
 
     async def _async_update_data(self) -> NavienData:
         """Poll status; read device info once and the schedule when it's due."""
@@ -83,6 +85,8 @@ class NavienCoordinator(DataUpdateCoordinator[NavienData]):
         else:
             features = await _cloud(self.client.async_get_features(self.device))
         status = await _cloud(self.client.async_get_status(self.device))
+        # It just answered, so it's online even if a connection event was missed.
+        self.module_online = True
         schedules = previous.schedules if previous else {}
         if self._schedule_due(status):
             schedules = await _cloud(
@@ -109,6 +113,13 @@ class NavienCoordinator(DataUpdateCoordinator[NavienData]):
         """Status pushed over MQTT: replies to other clients of this account, such as the app."""
         if device.device_id == self.device.device_id:
             self.async_apply_status(status)
+
+    @callback
+    def async_handle_online(self, device: Device, online: bool) -> None:
+        """The module reported going offline or coming back."""
+        if device.device_id == self.device.device_id:
+            self.module_online = online
+            self.async_update_listeners()
 
     @callback
     def async_apply_status(self, status: DeviceStatus | None) -> None:

@@ -5,7 +5,14 @@ from datetime import date, datetime, timedelta
 import time
 from typing import Any
 
-from .const import MAX_ZONE_TEMP, MIN_ZONE_TEMP, STATE_ON, HeatingMode, HotWaterMode
+from .const import (
+    MAX_ZONE_TEMP,
+    MIN_ZONE_TEMP,
+    STATE_ON,
+    ZONE_MASK,
+    HeatingMode,
+    HotWaterMode,
+)
 
 
 def _on(value: Any) -> bool:
@@ -144,6 +151,8 @@ class ZoneStatus:
     # Schedule layout: 1 = 7-day, 2 = 5/2, 3 = 5/1/1.
     program_type: int
     raw: dict[str, Any]
+    # Whether the zone's thermostat has a radio link to the module (from the status's `nrcConnected` bitmask).
+    thermostat_connected: bool = False
 
     @classmethod
     def from_json(cls, data: dict[str, Any]) -> ZoneStatus:
@@ -269,6 +278,9 @@ class DeviceStatus:
     def from_json(cls, status: dict[str, Any]) -> DeviceStatus:
         """Parse a status reply's `status` object."""
         zones = [ZoneStatus.from_json(z) for z in status.get("thermostats") or []]
+        linked = int(status.get("nrcConnected") or 0)
+        for zone in zones:
+            zone.thermostat_connected = bool(linked & ZONE_MASK.get(zone.zone_id, 0))
         return cls(
             burner_active=_on(status.get("operationBusy")),
             error_code=int(status.get("errorCode") or 0),

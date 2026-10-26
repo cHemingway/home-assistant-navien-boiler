@@ -21,6 +21,9 @@ MQTT_NSP = "nsp-"
 # Booleans in status payloads are 2 = on, 1 = off.
 STATE_ON = 2
 
+# `connection.status` in the module's connection event; anything else means online.
+CONNECTION_OFFLINE = 1
+
 
 class Command(IntEnum):
     """MQTT `request.command` values."""

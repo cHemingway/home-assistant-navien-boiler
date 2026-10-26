@@ -108,6 +108,7 @@ def mock_client() -> Generator[MagicMock]:
     client.async_set_holiday = AsyncMock(return_value=None)
     client.add_status_listener = MagicMock(return_value=lambda: None)
     client.add_connection_listener = MagicMock(return_value=lambda: None)
+    client.add_online_listener = MagicMock(return_value=lambda: None)
     with (
         patch(
             "custom_components.navien_smartplus.NavienSmartPlusClient",

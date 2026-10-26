@@ -98,6 +98,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: NavienConfigEntry) -> bo
         entry.async_on_unload(
             client.add_status_listener(coordinator.async_handle_status)
         )
+        entry.async_on_unload(
+            client.add_online_listener(coordinator.async_handle_online)
+        )
 
     def _connection_changed(connected: bool) -> None:
         # Reconnect promptly instead of waiting for the next poll, but not while Home Assistant is stopping.

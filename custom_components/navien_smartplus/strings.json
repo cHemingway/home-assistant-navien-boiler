@@ -31,9 +31,24 @@
   },
   "entity": {
     "binary_sensor": {
-      "burner": { "name": "Burner" },
-      "hot_water_active": { "name": "Hot water running" },
-      "fault": { "name": "Fault" }
+      "burner": {
+        "name": "Burner"
+      },
+      "hot_water_active": {
+        "name": "Hot water running"
+      },
+      "fault": {
+        "name": "Fault"
+      },
+      "online": {
+        "name": "Online"
+      },
+      "thermostat_connected": {
+        "name": "Thermostat connection"
+      },
+      "thermostat_connected_zone": {
+        "name": "Thermostat connection {zone}"
+      }
     },
     "climate": {
       "zone": {
@@ -49,17 +64,35 @@
       }
     },
     "sensor": {
-      "outdoor_temperature": { "name": "Outdoor temperature" },
-      "error_code": { "name": "Error code" },
-      "heating_gas": { "name": "Heating gas this year" },
-      "hot_water_gas": { "name": "Hot water gas this year" },
-      "total_gas": { "name": "Gas this year" },
-      "heating_hours": { "name": "Heating burner hours this year" },
-      "hot_water_hours": { "name": "Hot water burner hours this year" }
+      "outdoor_temperature": {
+        "name": "Outdoor temperature"
+      },
+      "error_code": {
+        "name": "Error code"
+      },
+      "heating_gas": {
+        "name": "Heating gas this year"
+      },
+      "hot_water_gas": {
+        "name": "Hot water gas this year"
+      },
+      "total_gas": {
+        "name": "Gas this year"
+      },
+      "heating_hours": {
+        "name": "Heating burner hours this year"
+      },
+      "hot_water_hours": {
+        "name": "Hot water burner hours this year"
+      }
     },
     "switch": {
-      "holiday": { "name": "Holiday mode" },
-      "holiday_zone": { "name": "Holiday mode {zone}" }
+      "holiday": {
+        "name": "Holiday mode"
+      },
+      "holiday_zone": {
+        "name": "Holiday mode {zone}"
+      }
     },
     "water_heater": {
       "hot_water": {

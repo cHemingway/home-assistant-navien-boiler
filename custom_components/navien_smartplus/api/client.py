@@ -11,6 +11,7 @@ import uuid
 import aiohttp
 
 from .const import (
+    CONNECTION_OFFLINE,
     MQTT_NSP,
     MQTT_PROTOCOL_VERSION,
     ZONE_MASK,
@@ -37,6 +38,7 @@ _LOGGER = logging.getLogger(__name__)
 
 StatusListener = Callable[[Device, DeviceStatus], None]
 ConnectionListener = Callable[[bool], None]
+OnlineListener = Callable[[Device, bool], None]
 RawListener = Callable[[str, dict[str, Any]], None]
 
 # Refresh tokens this long before they expire.
@@ -68,6 +70,7 @@ class NavienSmartPlusClient:
         self._closed = False
         self._status_listeners: list[StatusListener] = []
         self._connection_listeners: list[ConnectionListener] = []
+        self._online_listeners: list[OnlineListener] = []
         self._raw_listeners: list[RawListener] = []
         self._lock = asyncio.Lock()
         self._request_locks: dict[str, asyncio.Lock] = {}
@@ -199,6 +202,11 @@ class NavienSmartPlusClient:
         self._connection_listeners.append(listener)
         return lambda: self._connection_listeners.remove(listener)
 
+    def add_online_listener(self, listener: OnlineListener) -> Callable[[], None]:
+        """Call `listener` when a module reports going offline or coming back; returns a remover."""
+        self._online_listeners.append(listener)
+        return lambda: self._online_listeners.remove(listener)
+
     def _device_for_mac(self, mac: str | None) -> Device | None:
         mac = (mac or "").lower()
         return next((d for d in self.devices if d.mac == mac), None)
@@ -214,6 +222,10 @@ class NavienSmartPlusClient:
         if answered:
             # A reply to one of our own requests is handled by its caller.
             return
+        event = data.get("event")
+        if isinstance(event, dict) and isinstance(event.get("connection"), dict):
+            self._on_connection_event(event)
+            return
         response = data.get("response")
         if not isinstance(response, dict) or not isinstance(
             response.get("status"), dict
@@ -224,6 +236,19 @@ class NavienSmartPlusClient:
         status = DeviceStatus.from_json(response["status"])
         for listener in list(self._status_listeners):
             listener(device, status)
+
+    def _on_connection_event(self, event: dict[str, Any]) -> None:
+        """Tell the online listeners about a module's connection event."""
+        if (device := self._device_for_mac(event.get("macAddress"))) is None:
+            return
+        online = event["connection"].get("status") != CONNECTION_OFFLINE
+        _LOGGER.debug(
+            "Module %s reports it is %s",
+            device.device_id,
+            "online" if online else "offline",
+        )
+        for listener in list(self._online_listeners):
+            listener(device, online)
 
     def _envelope(
         self,

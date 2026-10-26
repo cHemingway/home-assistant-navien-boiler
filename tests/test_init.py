@@ -315,3 +315,38 @@ async def test_stop_closes_client_without_reconnecting(
     hass.bus.async_fire(EVENT_HOMEASSISTANT_STOP)
     await hass.async_block_till_done()
     mock_client.async_close.assert_awaited()
+
+
+async def test_online_and_thermostat_connection(
+    hass: HomeAssistant, mock_client: MagicMock, config_entry: MockConfigEntry
+) -> None:
+    """Online follows connection events and stays available to show offline; the zone's thermostat is linked."""
+    await setup_entry(hass, config_entry)
+    online = "binary_sensor.navien_boiler_online"
+    assert hass.states.get(online).state == "on"
+    assert (
+        hass.states.get("binary_sensor.navien_boiler_thermostat_connection").state
+        == "on"
+    )
+
+    on_online = mock_client.add_online_listener.call_args.args[0]
+    on_online(mock_client.devices[0], False)
+    await hass.async_block_till_done()
+    assert hass.states.get(online).state == "off"
+
+    # The module stops answering: other entities go unavailable, but Online still shows it offline.
+    mock_client.async_get_status.side_effect = NavienConnectionError("no reply")
+    coordinator = config_entry.runtime_data.coordinators[
+        mock_client.devices[0].device_id
+    ]
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+    assert hass.states.get(online).state == "off"
+    assert hass.states.get("binary_sensor.navien_boiler_burner").state == "unavailable"
+
+    # It comes back.
+    on_online(mock_client.devices[0], True)
+    mock_client.async_get_status.side_effect = None
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+    assert hass.states.get(online).state == "on"

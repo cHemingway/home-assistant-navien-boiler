@@ -11,7 +11,12 @@ from custom_components.navien_smartplus.api import (
     NavienSmartPlusClient,
     UsageRecord,
 )
-from custom_components.navien_smartplus.api.models import Account, AuthInfo, Session
+from custom_components.navien_smartplus.api.models import (
+    Account,
+    AuthInfo,
+    DeviceStatus,
+    Session,
+)
 from custom_components.navien_smartplus.api.sigv4 import presign_mqtt_path
 
 from .conftest import (
@@ -256,3 +261,37 @@ async def test_closed_client_does_not_reconnect() -> None:
     await client.async_close()
     with pytest.raises(NavienConnectionError):
         await client.async_connect()
+
+
+def test_connection_event_reports_online_state() -> None:
+    """The module's connection event: status 1 means offline, anything else online."""
+    client = NavienSmartPlusClient(MagicMock(), "user@example.com", "pw")
+    client.devices = fixture_devices()
+    seen: list[tuple[str, bool]] = []
+    client.add_online_listener(
+        lambda device, online: seen.append((device.device_id, online))
+    )
+    topic = "evt/3/nsp-001122334455/st/connection"
+    for status in (1, 2):
+        event = {
+            "macAddress": "001122334455",
+            "connection": {"status": status, "versionNumber": 1},
+        }
+        client._on_message(topic, {"event": event}, False)
+    client._on_message(
+        topic,
+        {"event": {"macAddress": "ffffffffffff", "connection": {"status": 1}}},
+        False,
+    )
+    assert seen == [("001122334455abcd", False), ("001122334455abcd", True)]
+
+
+def test_thermostat_link_from_bitmask() -> None:
+    """`nrcConnected` is a bitmask of zones whose thermostat is linked."""
+    raw = load_fixture("reply_status.json")["data"]["response"]["status"]
+    assert DeviceStatus.from_json(raw).zones[1].thermostat_connected
+    assert (
+        not DeviceStatus.from_json(raw | {"nrcConnected": 2})
+        .zones[1]
+        .thermostat_connected
+    )
