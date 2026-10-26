@@ -176,13 +176,22 @@ async def test_get_devices_empty(
 async def test_refresh_access_token(
     http: aiohttp.ClientSession, aioclient_mock: AiohttpClientMocker
 ) -> None:
-    """Token refresh sends the refresh token and returns the new access token."""
-    aioclient_mock.post(REFRESH_TOKEN_URL, json=ok({"accessToken": "access-2"}))
-    assert await NavienRestClient(http).refresh_access_token("refresh-1") == "access-2"
+    """Token refresh sends the refresh token and renews only the access token."""
+    previous = AuthInfo.from_json(SIGN_IN_DATA["authInfo"])
+    previous.aws_credentials_expire_at = time.time() + 60
+    aioclient_mock.post(
+        REFRESH_TOKEN_URL,
+        json=ok({"accessToken": "access-2", "authenticationExpiresIn": 3600}),
+    )
+    auth = await NavienRestClient(http).refresh_access_token(previous)
 
     [(_, _, body, headers)] = sent(aioclient_mock, REFRESH_TOKEN_URL)
     assert body == {"refreshToken": "refresh-1"}
     assert "Authorization" not in headers
+    assert (auth.access_token, auth.refresh_token) == ("access-2", "refresh-1")
+    assert auth.access_token_expires_at > time.time() + 3500
+    assert auth.session_token == "session-1"
+    assert auth.aws_credentials_expire_at == previous.aws_credentials_expire_at
 
 
 async def test_refresh_without_token(
@@ -191,21 +200,25 @@ async def test_refresh_without_token(
     """A refresh reply with no access token is treated as an auth failure."""
     aioclient_mock.post(REFRESH_TOKEN_URL, json=ok({}))
     with pytest.raises(NavienAuthError):
-        await NavienRestClient(http).refresh_access_token("refresh-1")
+        await NavienRestClient(http).refresh_access_token(
+            AuthInfo.from_json(SIGN_IN_DATA["authInfo"])
+        )
 
 
 async def test_refresh_session_keeps_tokens(
     http: aiohttp.ClientSession, aioclient_mock: AiohttpClientMocker
 ) -> None:
-    """New AWS credentials keep the tokens the reply leaves out."""
+    """New AWS credentials keep the access token, and its expiry, from before."""
     aioclient_mock.post(
         REFRESH_SESSION_URL,
         json=ok(
             {"accessKeyId": "AKIA2", "secretKey": "secret-2", "sessionToken": "s2"}
         ),
     )
+    previous = AuthInfo.from_json(SIGN_IN_DATA["authInfo"])
+    previous.access_token_expires_at = time.time() + 60
     auth = await NavienRestClient(http).refresh_session(
-        "access-1", "user@example.com", AuthInfo.from_json(SIGN_IN_DATA["authInfo"])
+        "access-1", "user@example.com", previous
     )
 
     [(_, _, body, headers)] = sent(aioclient_mock, REFRESH_SESSION_URL)
@@ -213,6 +226,8 @@ async def test_refresh_session_keeps_tokens(
     assert body == {"email": "user@example.com"}
     assert (auth.access_key_id, auth.session_token) == ("AKIA2", "s2")
     assert (auth.access_token, auth.refresh_token) == ("access-1", "refresh-1")
+    assert auth.access_token_expires_at == previous.access_token_expires_at
+    assert auth.aws_credentials_expire_at > time.time() + 3500
 
 
 async def test_client_refreshes_expiring_token(
@@ -225,7 +240,7 @@ async def test_client_refreshes_expiring_token(
     client = NavienSmartPlusClient(http, "user@example.com", "pw")
 
     await client.async_get_devices()
-    client.session.auth.obtained_at = time.time() - 3500
+    client.session.auth.access_token_expires_at = time.time() + 60
     await client.async_get_devices()
 
     assert len(sent(aioclient_mock, SIGN_IN_URL)) == 1
@@ -245,7 +260,7 @@ async def test_client_signs_in_when_refresh_fails(
     client = NavienSmartPlusClient(http, "user@example.com", "pw")
 
     await client.async_get_devices()
-    client.session.auth.obtained_at = time.time() - 3500
+    client.session.auth.access_token_expires_at = time.time() + 60
     await client.async_get_devices()
 
     assert len(sent(aioclient_mock, REFRESH_TOKEN_URL)) == 1
@@ -259,3 +274,47 @@ async def test_client_password_rejected(
     aioclient_mock.post(SIGN_IN_URL, json={"code": 512, "msg": "Password mismatch"})
     with pytest.raises(NavienAuthError):
         await NavienSmartPlusClient(http, "user@example.com", "old").async_get_devices()
+
+
+async def test_reconnect_after_an_hour_renews_aws_credentials(
+    http: aiohttp.ClientSession, aioclient_mock: AiohttpClientMocker
+) -> None:
+    """When both expire together, renewing the access token doesn't hide the AWS credentials' expiry.
+
+    Both last an hour (3600 s) on the live cloud.
+    """
+    aioclient_mock.post(SIGN_IN_URL, json=ok(SIGN_IN_DATA))
+    aioclient_mock.post(REFRESH_TOKEN_URL, json=ok({"accessToken": "access-2"}))
+    aioclient_mock.post(
+        REFRESH_SESSION_URL,
+        json=ok(
+            {"accessKeyId": "AKIA2", "secretKey": "secret-2", "sessionToken": "s2"}
+        ),
+    )
+    client = NavienSmartPlusClient(http, "user@example.com", "pw")
+    await client.login()
+    auth = client.session.auth
+    auth.access_token_expires_at = auth.aws_credentials_expire_at = time.time() + 60
+
+    fresh = await client._fresh_aws_credentials()
+
+    assert (fresh.access_token, fresh.session_token) == ("access-2", "s2")
+    [(*_, headers)] = sent(aioclient_mock, REFRESH_SESSION_URL)
+    assert headers["Authorization"] == "access-2"
+    assert len(sent(aioclient_mock, SIGN_IN_URL)) == 1
+
+
+async def test_client_signs_in_when_aws_refresh_fails(
+    http: aiohttp.ClientSession, aioclient_mock: AiohttpClientMocker
+) -> None:
+    """A rejected AWS credential refresh falls back to signing in, which issues new ones."""
+    aioclient_mock.post(SIGN_IN_URL, json=ok(SIGN_IN_DATA))
+    aioclient_mock.post(REFRESH_SESSION_URL, json={"code": 401, "msg": "Expired"})
+    client = NavienSmartPlusClient(http, "user@example.com", "pw")
+    await client.login()
+    client.session.auth.aws_credentials_expire_at = time.time() + 60
+
+    fresh = await client._fresh_aws_credentials()
+
+    assert len(sent(aioclient_mock, SIGN_IN_URL)) == 2
+    assert fresh.aws_credentials_expire_at > time.time() + 3500

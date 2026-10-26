@@ -100,13 +100,10 @@ class NavienSmartPlusClient:
             return session
         if auth.refresh_token:
             try:
-                auth.access_token = await self._rest.refresh_access_token(
-                    auth.refresh_token
-                )
+                session.auth = await self._rest.refresh_access_token(auth)
             except NavienError:
                 _LOGGER.debug("Token refresh failed, signing in again")
             else:
-                auth.obtained_at = time.time()
                 return session
         return await self._sign_in()
 

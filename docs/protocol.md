@@ -86,6 +86,10 @@ Response `data`:
 ```
 Response `data`: `accessToken`, `authenticationExpiresIn`.
 
+Both the access token and the AWS credentials last an hour (3600 s, checked 2026-10-26). They are renewed by
+different calls, and each call's reply covers only its own credential (the AWS refresh returns
+`authenticationExpiresIn: 0`), so track the two expiry times separately.
+
 ### Refresh the AWS (MQTT) credentials
 
 `POST /api/v1.0/users/token/session/refresh` with `Authorization: <accessToken>`

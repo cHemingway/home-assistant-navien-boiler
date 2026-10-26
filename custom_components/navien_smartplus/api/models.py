@@ -1,6 +1,6 @@
 """Data models parsed from Navien Smart Plus REST and MQTT payloads."""
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 import time
 from typing import Any
@@ -35,36 +35,40 @@ class AuthInfo:
     access_key_id: str
     secret_key: str
     session_token: str
-    authentication_expires_in: int = 0
-    authorization_expires_in: int = 0
-    obtained_at: float = field(default_factory=time.time)
+    # Unix times. The access token and the AWS credentials are renewed separately.
+    access_token_expires_at: float = 0
+    aws_credentials_expire_at: float = 0
 
     @classmethod
     def from_json(
         cls, data: dict[str, Any], previous: AuthInfo | None = None
     ) -> AuthInfo:
-        """Parse an `authInfo` object, keeping the previous tokens for fields it leaves out."""
-        return cls(
-            access_token=data.get("accessToken")
-            or (previous.access_token if previous else ""),
-            refresh_token=data.get("refreshToken")
-            or (previous.refresh_token if previous else None),
+        """Parse an `authInfo` object, keeping the previous token or AWS credentials when it leaves them out."""
+        auth = cls(
+            access_token=data.get("accessToken", ""),
+            refresh_token=data.get("refreshToken"),
             access_key_id=data.get("accessKeyId", ""),
             secret_key=data.get("secretKey", ""),
             session_token=data.get("sessionToken", ""),
-            authentication_expires_in=int(data.get("authenticationExpiresIn") or 0),
-            authorization_expires_in=int(data.get("authorizationExpiresIn") or 0),
+            access_token_expires_at=_expiry(data.get("authenticationExpiresIn")),
+            aws_credentials_expire_at=_expiry(data.get("authorizationExpiresIn")),
         )
+        if previous:
+            if not auth.access_token:
+                auth.access_token = previous.access_token
+                auth.access_token_expires_at = previous.access_token_expires_at
+            if not auth.access_key_id:
+                auth.access_key_id = previous.access_key_id
+                auth.secret_key = previous.secret_key
+                auth.session_token = previous.session_token
+                auth.aws_credentials_expire_at = previous.aws_credentials_expire_at
+            auth.refresh_token = auth.refresh_token or previous.refresh_token
+        return auth
 
-    @property
-    def access_token_expires_at(self) -> float:
-        """When the access token runs out, as a Unix time."""
-        return self.obtained_at + (self.authentication_expires_in or 3600)
 
-    @property
-    def aws_credentials_expire_at(self) -> float:
-        """When the AWS credentials for MQTT run out, as a Unix time."""
-        return self.obtained_at + (self.authorization_expires_in or 3600)
+def _expiry(expires_in: Any) -> float:
+    """When a credential issued now runs out; an hour when the reply doesn't say."""
+    return time.time() + (int(expires_in or 0) or 3600)
 
 
 @dataclass

@@ -102,15 +102,14 @@ class NavienRestClient:
             account=account, auth=AuthInfo.from_json(data.get("authInfo") or {})
         )
 
-    async def refresh_access_token(self, refresh_token: str) -> str:
+    async def refresh_access_token(self, previous: AuthInfo) -> AuthInfo:
         """Exchange the refresh token for a new access token."""
         data = await self._request(
-            "POST", PATH_REFRESH_TOKEN, json={"refreshToken": refresh_token}
+            "POST", PATH_REFRESH_TOKEN, json={"refreshToken": previous.refresh_token}
         )
-        token = data.get("accessToken")
-        if not token:
+        if not data.get("accessToken"):
             raise NavienAuthError("Refresh returned no access token")
-        return token
+        return AuthInfo.from_json(data, previous=previous)
 
     async def refresh_session(
         self, access_token: str, email: str, previous: AuthInfo
