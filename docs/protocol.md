@@ -226,6 +226,17 @@ Publish to `cmd/T/nsp-M/st`:
 `zoneUseSetting` is a zone bitmask: zone 1 → 1, zone 2 → 2, zone 3 → 4. The reply's `thermostats` list covers
 every zone *(verify with more than one zone)*.
 
+### When the app asks
+
+The app has no status timer. It requests status only:
+- when it connects, right after reading the device info (`st/start`);
+- when the module's connection event says the module is back online;
+- when an override ends, to fetch the zone's new state;
+- after a control command, whose reply is a full status anyway.
+
+The rest of the time it relies on the module's unprompted pushes on `cmd/T/nsp-M/res` (see [Replies](#replies)). The
+integration does the same and polls only every 10 minutes, as a safety net for a missed push or a stalled connection.
+
 ### Reply
 
 `response.status`. Fields seen from a gas combi with one zone (full example in
