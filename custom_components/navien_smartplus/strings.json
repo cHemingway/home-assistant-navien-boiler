@@ -68,7 +68,59 @@
         "name": "Outdoor temperature"
       },
       "error_code": {
-        "name": "Error code"
+        "name": "Error code",
+        "state": {
+          "none": "No error",
+          "unknown": "Unknown error",
+          "e001": "E001 Overheating of heat exchanger",
+          "e003": "E003 Ignition failure",
+          "e004": "E004 False flame detection",
+          "e012": "E012 Flame loss",
+          "e016": "E016 Heat exchanger overheat",
+          "e030": "E030 Abnormal exhaust temperature",
+          "e031": "E031 Burner overheat",
+          "e046": "E046 Abnormal operation: heat exchanger overheating sensor",
+          "e047": "E047 Abnormal operation: exhaust thermostat",
+          "e056": "E056 Abnormal operation: oil pump",
+          "e060": "E060 Abnormal operation: dual venturi limit switch",
+          "e109": "E109 Abnormal operation: fan",
+          "e110": "E110 Exhaust blockage (condensate blockage)",
+          "e127": "E127 Abnormal operation: air pressure sensor (APS)",
+          "e144": "E144 Abnormal operation: burner temperature sensor",
+          "e157": "E157 Abnormal operation: air pressure sensor (APS) hose",
+          "e205": "E205 Heating supply thermistor open or short circuit",
+          "e218": "E218 Heating return thermistor open or short circuit",
+          "e291": "E291 Supply/return inversion limit",
+          "e302": "E302 Low water pressure",
+          "e352": "E352 High water pressure",
+          "e353": "E353 Abnormal operation: water pressure sensor",
+          "e407": "E407 Hot water outlet thermistor open or short circuit",
+          "e421": "E421 Hot water inlet thermistor open or short circuit",
+          "e434": "E434 Abnormal operation: flow control valve",
+          "e441": "E441 Hot water outlet 2 thermistor open or short circuit",
+          "e445": "E445 Abnormal operation: mixing valve",
+          "e480": "E480 Hot water tank thermistor open or short circuit",
+          "e515": "E515 Abnormal operation: relay feedback (PCB)",
+          "e517": "E517 Abnormal operation: DIP switch setting (PCB)",
+          "e593": "E593 Abnormal operation: touch IC (panel PCB)",
+          "e594": "E594 Abnormal operation: EEPROM (PCB)",
+          "e598": "E598 Abnormal operation: panel real-time clock",
+          "e615": "E615 Abnormal operation: input and memory (MCU)",
+          "e740": "E740 Abnormal operation: outdoor temperature sensor",
+          "e782": "E782 Abnormal operation: main panel communication",
+          "e783": "E783 Abnormal operation: OpenTherm remote control",
+          "e787": "E787 Abnormal operation: reset device",
+          "e788": "E788 Abnormal operation: gas type settings",
+          "e792": "E792 Abnormal operation: hot water circulation"
+        },
+        "state_attributes": {
+          "code": {
+            "name": "Code"
+          },
+          "sub_error_code": {
+            "name": "Sub-error code"
+          }
+        }
       },
       "heating_gas": {
         "name": "Heating gas this year"

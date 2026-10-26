@@ -350,3 +350,42 @@ async def test_online_and_thermostat_connection(
     await coordinator.async_refresh()
     await hass.async_block_till_done()
     assert hass.states.get(online).state == "on"
+
+
+def test_error_states_have_descriptions() -> None:
+    """Every error code in the table maps to a state with a translated description."""
+    import json
+    from pathlib import Path
+
+    from custom_components.navien_smartplus.const import ERROR_CODES
+    from custom_components.navien_smartplus.sensor import error_state
+
+    assert error_state(0) == "none"
+    assert error_state(3) == "e003"
+    assert error_state(999) == "unknown"
+    translations = (
+        Path(__file__).parent.parent
+        / "custom_components/navien_smartplus/translations/en.json"
+    )
+    states = json.loads(translations.read_text())["entity"]["sensor"]["error_code"][
+        "state"
+    ]
+    assert set(states) == {"none", "unknown"} | {f"e{code:03d}" for code in ERROR_CODES}
+    assert states["e302"] == "E302 Low water pressure"
+
+
+async def test_error_code_sensor(
+    hass: HomeAssistant, mock_client: MagicMock, config_entry: MockConfigEntry
+) -> None:
+    """A boiler error shows as its code, with the code and sub-code as attributes."""
+    status = fixture_status()
+    status.error_code = 302
+    status.raw = status.raw | {"errorCode": 302, "subErrorCode": 1}
+    mock_client.async_get_status.return_value = status
+    await setup_entry(hass, config_entry)
+
+    state = hass.states.get("sensor.navien_boiler_error_code")
+    assert state.state == "e302"
+    assert state.attributes["code"] == "E302"
+    assert state.attributes["sub_error_code"] == 1
+    assert hass.states.get("binary_sensor.navien_boiler_fault").state == "on"

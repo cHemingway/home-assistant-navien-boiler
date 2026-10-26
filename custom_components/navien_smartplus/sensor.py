@@ -2,6 +2,7 @@
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from typing import Any
 
 from homeassistant.components.sensor import (
     SensorDeviceClass,
@@ -21,6 +22,7 @@ from homeassistant.helpers.typing import StateType
 
 from . import NavienConfigEntry
 from .api import DeviceStatus, UsageRecord
+from .const import ERROR_CODES, ERROR_STATE_NONE, ERROR_STATE_UNKNOWN
 from .coordinator import NavienCoordinator, NavienUsageCoordinator
 from .entity import NavienEntity, NavienUsageEntity
 
@@ -33,6 +35,23 @@ class NavienStatusSensorDescription(SensorEntityDescription):
 
     value_fn: Callable[[DeviceStatus], StateType]
     exists_fn: Callable[[DeviceStatus], bool] = lambda _: True
+    attributes_fn: Callable[[DeviceStatus], dict[str, Any]] | None = None
+
+
+def error_state(code: int) -> str:
+    """The error code sensor's state: `none`, `e003` for a known code, or `unknown`."""
+    if code == 0:
+        return ERROR_STATE_NONE
+    return f"e{code:03d}" if code in ERROR_CODES else ERROR_STATE_UNKNOWN
+
+
+def error_attributes(status: DeviceStatus) -> dict[str, Any]:
+    """The code as shown on the boiler, and the sub-code the app shows after it."""
+    code = status.error_code
+    return {
+        "code": f"E{code:03d}" if code else None,
+        "sub_error_code": status.raw.get("subErrorCode"),
+    }
 
 
 STATUS_SENSORS: tuple[NavienStatusSensorDescription, ...] = (
@@ -49,7 +68,14 @@ STATUS_SENSORS: tuple[NavienStatusSensorDescription, ...] = (
         key="error_code",
         translation_key="error_code",
         entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=lambda s: s.error_code,
+        device_class=SensorDeviceClass.ENUM,
+        options=[
+            ERROR_STATE_NONE,
+            ERROR_STATE_UNKNOWN,
+            *(f"e{code:03d}" for code in ERROR_CODES),
+        ],
+        value_fn=lambda s: error_state(s.error_code),
+        attributes_fn=error_attributes,
     ),
 )
 
@@ -145,7 +171,10 @@ class NavienStatusSensor(NavienEntity, SensorEntity):
         self.entity_description = description
 
     def _update_attrs(self) -> None:
-        self._attr_native_value = self.entity_description.value_fn(self.status)
+        description = self.entity_description
+        self._attr_native_value = description.value_fn(self.status)
+        if description.attributes_fn is not None:
+            self._attr_extra_state_attributes = description.attributes_fn(self.status)
 
 
 class NavienUsageSensor(NavienUsageEntity, SensorEntity):

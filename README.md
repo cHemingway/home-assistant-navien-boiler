@@ -28,7 +28,7 @@ One device per Smart Plus module, with:
 | Water heater "Hot water" | Hot water mode: Schedule, On, Boost (once), Off. The combi doesn't report water temperatures. |
 | Switch "Holiday mode" | Holiday (away) mode per zone. |
 | Binary sensors | Burner on, hot water running, fault. Diagnostic: Online (the module's link to Navien's cloud) and, per zone, Thermostat connection (its radio link to the module). |
-| Sensors | Outdoor temperature (when weather is set up in the app), error code. |
+| Sensors | Outdoor temperature (when weather is set up in the app). Diagnostic: Error code, shown as the boiler's code and description, e.g. "E302 Low water pressure", from Navien's manuals. |
 | Gas sensors | Heating, hot water and total gas **this year** in m³, plus burner hours (disabled by default). |
 
 Status is polled every minute. The integration also hears the cloud's replies to the Smart Plus app, so changes

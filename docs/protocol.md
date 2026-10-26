@@ -18,15 +18,16 @@ Conventions:
 2. [REST API](#rest-api)
 3. [MQTT](#mqtt)
 4. [Status](#status)
-5. [Device info](#device-info)
-6. [Control](#control)
-7. [Heating schedule](#heating-schedule)
-8. [Auto target temperature](#auto-target-temperature)
-9. [Fuel usage history](#fuel-usage-history)
-10. [Local interfaces](#local-interfaces)
-11. [Things deliberately not used](#things-deliberately-not-used)
-12. [Background and related work](#background-and-related-work)
-13. [Test log](#test-log)
+5. [Error codes](#error-codes)
+6. [Device info](#device-info)
+7. [Control](#control)
+8. [Heating schedule](#heating-schedule)
+9. [Auto target temperature](#auto-target-temperature)
+10. [Fuel usage history](#fuel-usage-history)
+11. [Local interfaces](#local-interfaces)
+12. [Things deliberately not used](#things-deliberately-not-used)
+13. [Background and related work](#background-and-related-work)
+14. [Test log](#test-log)
 
 ## Overview
 
@@ -258,6 +259,8 @@ Their scaling is unknown.
     `nrcConnected` and `vcmConnected` (0 here, with no wiring centre), it's probably "1 boiler linked over the KIW
     bus" *(unverified)*. The app works out connectivity from `nrcConnected` and the module's connection event
     instead.
+- **Errors**: `errorCode` is the boiler's fault code, shown as `E` plus three digits, with `0` meaning no error. See
+  [Error codes](#error-codes).
 - **Temperatures**:
   - `insideTemperature`, `insideTemperatureSetting`, `freezeProtectionTemperature`: ÷2 (°C, 0.5 steps)
   - `outsideTemperature`: ÷10 (°C)
@@ -269,6 +272,79 @@ Their scaling is unknown.
   [Auto target temperature](#auto-target-temperature)).
 - **In Auto, `insideTemperatureSetting` is stale**: it keeps the last override value. Work the target out from the
   schedule instead (see [Auto target temperature](#auto-target-temperature)).
+
+## Error codes
+
+The status's `errorCode` (and `subErrorCode`) are the boiler's own fault codes. The boiler's front panel shows
+`errorCode` as `E` plus three digits, e.g. `3` → `E003`, and the app formats it the same way (`BoilerErrorUtil`).
+`0` means no error. The app's main screen only says "Boiler Error"; its smart-diagnosis screen looks up a description
+in a built-in table of 35 codes and appends the sub-code, as in `E515-23`.
+
+The integration's table below follows Navien's boiler manuals rather than the app's wording, which is shorter and
+sometimes less useful (e.g. the app calls E110 "Abnormal air pressure", while the manuals say "Exhaust blockage
+(condensate blockage)"). Every code in the app's table appears in the manuals with the same number. No code means
+different things in different manuals; the oil-fired LCB700 adds three codes of its own (E056, E144, E157). Each manual
+also gives a reset type (Auto, Manual or Alarm). That varies between models (E001 is Manual on the NCB700 but
+Manual/Auto on the NCB300), so the integration doesn't show it.
+
+| Code | Description | Listed in |
+|---|---|---|
+| E001 | Overheating of heat exchanger | NCB700, NCB300, LCB700, Service |
+| E003 | Ignition failure | NCB700, NCB300, LCB700, Service |
+| E004 | False flame detection | NCB700, NCB300, LCB700, Service |
+| E012 | Flame loss | NCB700, NCB300, LCB700, Service |
+| E016 | Heat exchanger overheat | NCB700, NCB300, LCB700, Service |
+| E030 | Abnormal exhaust temperature | NCB700, NCB300, LCB700, Service |
+| E031 | Burner overheat | NCB700, NCB300, LCB700 |
+| E046 | Abnormal operation: heat exchanger overheating sensor | NCB700, NCB300, LCB700, Service |
+| E047 | Abnormal operation: exhaust thermostat | NCB700, NCB300, LCB700, Service |
+| E056 | Abnormal operation: oil pump | LCB700 |
+| E060 | Abnormal operation: dual venturi limit switch | NCB700, Service |
+| E109 | Abnormal operation: fan | NCB700, NCB300, LCB700, Service |
+| E110 | Exhaust blockage (condensate blockage) | NCB700, LCB700, Service |
+| E127 | Abnormal operation: air pressure sensor (APS) | NCB700, LCB700, Service |
+| E144 | Abnormal operation: burner temperature sensor | LCB700 |
+| E157 | Abnormal operation: air pressure sensor (APS) hose | LCB700 |
+| E205 | Heating supply thermistor open or short circuit | NCB700, NCB300, LCB700, Service |
+| E218 | Heating return thermistor open or short circuit | NCB700, Service |
+| E291 | Supply/return inversion limit | NCB700 |
+| E302 | Low water pressure | NCB700, NCB300, LCB700, Service |
+| E352 | High water pressure | NCB700, LCB700, Service |
+| E353 | Abnormal operation: water pressure sensor | NCB700, LCB700, Service |
+| E407 | Hot water outlet thermistor open or short circuit | NCB700, NCB300, LCB700, Service |
+| E421 | Hot water inlet thermistor open or short circuit | NCB700, LCB700, Service |
+| E434 | Abnormal operation: flow control valve | NCB700 |
+| E441 | Hot water outlet 2 thermistor open or short circuit | NCB700, LCB700 |
+| E445 | Abnormal operation: mixing valve | NCB700, LCB700 |
+| E480 | Hot water tank thermistor open or short circuit | NCB700, LCB700, Service |
+| E515 | Abnormal operation: relay feedback (PCB) | NCB700, NCB300, LCB700, Service |
+| E517 | Abnormal operation: DIP switch setting (PCB) | NCB700, NCB300, LCB700, Service |
+| E593 | Abnormal operation: touch IC (panel PCB) | NCB700, NCB300 |
+| E594 | Abnormal operation: EEPROM (PCB) | NCB700, NCB300, LCB700, Service |
+| E598 | Abnormal operation: panel real-time clock | NCB700, NCB300 |
+| E615 | Abnormal operation: input and memory (MCU) | NCB700, NCB300, LCB700, Service |
+| E740 | Abnormal operation: outdoor temperature sensor | NCB700, NCB300, LCB700, Service |
+| E782 | Abnormal operation: main panel communication | NCB700, NCB300, LCB700, Service |
+| E783 | Abnormal operation: OpenTherm remote control | NCB700, NCB300, LCB700, Service |
+| E787 | Abnormal operation: reset device | NCB700, NCB300, LCB700, Service |
+| E788 | Abnormal operation: gas type settings | NCB700, NCB300 |
+| E792 | Abnormal operation: hot water circulation | NCB700 |
+
+Sources, all from Navien UK's [manuals page](https://navien.co.uk/support/manuals-and-brochures/), checked 2026-10-26:
+- **NCB700**: *NCB700 Combi Installation & Operation Manual* (doc. 20051189B, 2024-10-07), section 10.8 "Error Codes",
+  p. 74.
+  [PDF](https://navien.co.uk/wp-content/uploads/2025/10/20051189BNCB700_Combi_CE_GB_Installation__Operation_Manual_EN_241007-1.pdf)
+- **NCB300**: *NCB300 Combi Installation & Operation Manual* (2026-01-02), section 10.8 "Error Codes", p. 55.
+  [PDF](https://navien.co.uk/wp-content/uploads/2025/10/NCB300_Combi_CE_GB_Installation__Operation_Manual_EN_260102-1.pdf)
+- **LCB700**: *LCB700 Combi Installation & Operation Manual* (doc. 20047769C, 2026-02-13), section 11.6 "Error Codes",
+  p. 67. [PDF](https://navien.co.uk/wp-content/uploads/2025/10/20047769CLCB700En_combi_260213_B.pdf)
+- **Service**: *NCB Condensing Combi/System Boiler Service Manual* (universal, 2016-09-02), sections 4.1 "Error Code
+  Classification" and 4.2 "Error Code List and Actions", pp. 84–85. This covers the older NCB-CE range, which uses the
+  same codes. The NCB-CE installation manual mentions low water pressure as "E02", apparently a shortened display form.
+  [PDF](https://navien.co.uk/wp-content/uploads/2025/10/NCB_Service_Manual_Universal-Sep-2-2016.pdf)
+
+Not yet confirmed on hardware: that a real fault reports in `errorCode` with these numbers (the system tested has only
+ever reported `0`).
 
 ## Device info
 
@@ -519,3 +595,4 @@ thermostat by hand. The zone started in Auto at 18 °C.
 - Setting a zone to Off
 - Systems with more than one zone, a VCU-10R wiring centre, a system or regular boiler, or an oil (LCB700) boiler
 - The module's connection event (going offline and back)
+- A real boiler fault in `errorCode` (only `0` seen so far)
