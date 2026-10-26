@@ -604,6 +604,18 @@ thermostat by hand. The zone started in Auto at 18 °C.
 - All 9 messages in 10 minutes arrived on `cmd/T/nsp-M/res` and nothing on any other topic, so the integration's
   existing subscription already gets these updates.
 
+### 2026-10-26: MQTT reconnect after the credentials expire
+
+The local test instance signed in at 20:11, so its first access token and AWS credentials expired at 21:11.
+- 20:39, the connection dropped by itself (a socket timeout) and reconnected within a second. Drops happen
+  without any action, so reconnecting after the first hour is a normal event.
+- 21:16, a script connected with the instance's MQTT client ID. AWS IoT dropped the instance's older connection,
+  and the instance reconnected 1.2 s later, which dropped the script's. Its first status after reconnecting
+  arrived 1.5 s later.
+- There was no second sign-in, so the reconnect used a refreshed access token and refreshed AWS credentials. This
+  confirmed the fix for tracking the two expiry times separately. Before it, renewing the access token made the
+  expired AWS credentials look fresh.
+
 ### Not yet tested on hardware
 
 - `dhw-mode` changes (including whether 2 = ONCE is a one-off boost)
