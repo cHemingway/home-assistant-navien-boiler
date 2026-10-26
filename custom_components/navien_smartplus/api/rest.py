@@ -60,21 +60,28 @@ class NavienRestClient:
                     body = await resp.json(content_type=None)
                 except ValueError as err:
                     raise NavienApiError(
-                        f"Non-JSON response from {path} (HTTP {resp.status})",
-                        resp.status,
+                        f"Non-JSON response from {path} (HTTP {resp.status})"
                     ) from err
         except (aiohttp.ClientError, TimeoutError) as err:
             raise NavienConnectionError(f"{method} {path} failed: {err}") from err
 
         if not isinstance(body, dict):
-            raise NavienApiError(f"Unexpected response from {path}", resp.status)
-        code = body.get("code", resp.status)
-        if code == 200:
+            raise NavienApiError(
+                f"Unexpected response from {path} (HTTP {resp.status})"
+            )
+        # The cloud's own result code. A gateway error page has none, and its HTTP
+        # status mustn't be mistaken for one (502 from sign-in means bad credentials).
+        code = body.get("code")
+        if (resp.status if code is None else code) == 200:
             return body.get("data") or {}
-        message = body.get("msg") or body.get("message") or f"HTTP {resp.status}"
+        message = body.get("msg") or body.get("message") or "no message"
         if resp.status == 401 or code == 401:
-            raise NavienAuthError(f"{path}: {message} (code {code})")
-        raise NavienApiError(f"{path}: {message} (code {code})", code)
+            raise NavienAuthError(
+                f"{path}: {message} (code {code}, HTTP {resp.status})"
+            )
+        raise NavienApiError(
+            f"{path}: {message} (code {code}, HTTP {resp.status})", code
+        )
 
     async def sign_in(self, email: str, password: str) -> Session:
         """Sign in with the app login."""
