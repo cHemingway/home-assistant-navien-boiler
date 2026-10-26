@@ -246,3 +246,13 @@ async def test_mqtt_reply_matching() -> None:
     mqtt._handle("t/res/did", json.dumps({"sessionID": "123", "response": {}}))
     assert future.result() == {"sessionID": "123", "response": {}}
     assert seen == [("t/res", False), ("t/res/did", True)]
+
+
+async def test_closed_client_does_not_reconnect() -> None:
+    """Once closed, the client refuses to connect again, so nothing reconnects during shutdown."""
+    from custom_components.navien_smartplus.api import NavienConnectionError
+
+    client = NavienSmartPlusClient(MagicMock(), "user@example.com", "pw")
+    await client.async_close()
+    with pytest.raises(NavienConnectionError):
+        await client.async_connect()

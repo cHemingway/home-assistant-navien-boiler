@@ -20,8 +20,12 @@ from homeassistant.components.water_heater import (
     SERVICE_SET_OPERATION_MODE,
 )
 from homeassistant.config_entries import ConfigEntryState
-from homeassistant.const import ATTR_ENTITY_ID, ATTR_TEMPERATURE
-from homeassistant.core import HomeAssistant
+from homeassistant.const import (
+    ATTR_ENTITY_ID,
+    ATTR_TEMPERATURE,
+    EVENT_HOMEASSISTANT_STOP,
+)
+from homeassistant.core import CoreState, HomeAssistant
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.util import dt as dt_util
 import pytest
@@ -293,3 +297,21 @@ async def test_daily_usage_only_fetched_when_totals_change(
     await usage.async_refresh()
     assert mock_client.async_get_daily_usage.await_count == 14
     assert hass.states.get("sensor.navien_boiler_heating_gas_this_year").state == "253"
+
+
+async def test_stop_closes_client_without_reconnecting(
+    hass: HomeAssistant, mock_client: MagicMock, config_entry: MockConfigEntry
+) -> None:
+    """Home Assistant's stop event closes the client, and a drop while stopping doesn't trigger a refresh."""
+    await setup_entry(hass, config_entry)
+    connection_changed = mock_client.add_connection_listener.call_args.args[0]
+    polls = mock_client.async_get_status.await_count
+
+    hass.set_state(CoreState.stopping)
+    connection_changed(False)
+    await hass.async_block_till_done()
+    assert mock_client.async_get_status.await_count == polls
+
+    hass.bus.async_fire(EVENT_HOMEASSISTANT_STOP)
+    await hass.async_block_till_done()
+    mock_client.async_close.assert_awaited()

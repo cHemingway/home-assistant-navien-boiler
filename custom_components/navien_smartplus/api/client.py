@@ -65,7 +65,7 @@ class NavienSmartPlusClient:
         self.session: Session | None = None
         self.devices: list[Device] = []
         self._mqtt: NavienMqtt | None = None
-        self._closing = False
+        self._closed = False
         self._status_listeners: list[StatusListener] = []
         self._connection_listeners: list[ConnectionListener] = []
         self._raw_listeners: list[RawListener] = []
@@ -150,6 +150,8 @@ class NavienSmartPlusClient:
     async def async_connect(self) -> None:
         """Connect MQTT (signing in and listing devices first if needed)."""
         async with self._lock:
+            if self._closed:
+                raise NavienConnectionError("Client is closed")
             if self.connected:
                 return
             if not self.devices:
@@ -159,7 +161,6 @@ class NavienSmartPlusClient:
                 self._ssl_context = await asyncio.get_running_loop().run_in_executor(
                     None, ssl.create_default_context
                 )
-            self._closing = False
             self._mqtt = NavienMqtt(
                 self._client_id,
                 self._on_message,
@@ -173,15 +174,15 @@ class NavienSmartPlusClient:
             listener(True)
 
     def _on_disconnect(self, error: Exception | None) -> None:
-        if self._closing:
+        if self._closed:
             return
         _LOGGER.debug("MQTT disconnected, reconnecting on the next request: %s", error)
         for listener in self._connection_listeners:
             listener(False)
 
     async def async_close(self) -> None:
-        """Disconnect MQTT."""
-        self._closing = True
+        """Disconnect MQTT for good; the client won't reconnect after this."""
+        self._closed = True
         if self._mqtt:
             await self._mqtt.disconnect()
             self._mqtt = None

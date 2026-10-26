@@ -4,8 +4,14 @@ from dataclasses import dataclass
 
 from homeassistant.components.recorder import get_instance
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import CONF_CLIENT_ID, CONF_EMAIL, CONF_PASSWORD, Platform
-from homeassistant.core import HomeAssistant
+from homeassistant.const import (
+    CONF_CLIENT_ID,
+    CONF_EMAIL,
+    CONF_PASSWORD,
+    EVENT_HOMEASSISTANT_STOP,
+    Platform,
+)
+from homeassistant.core import Event, HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.util.ssl import get_default_context
@@ -52,6 +58,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: NavienConfigEntry) -> bo
     )
     # Home Assistant also runs this when setup fails part-way.
     entry.async_on_unload(client.async_close)
+
+    async def _async_stop(event: Event) -> None:
+        # Home Assistant doesn't unload integrations when it stops, so close the connection ourselves.
+        await client.async_close()
+
+    entry.async_on_unload(
+        hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STOP, _async_stop)
+    )
     try:
         await client.async_get_devices()
         await client.async_connect()
@@ -86,8 +100,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: NavienConfigEntry) -> bo
         )
 
     def _connection_changed(connected: bool) -> None:
-        # Reconnect promptly instead of waiting for the next poll.
-        if not connected:
+        # Reconnect promptly instead of waiting for the next poll, but not while Home Assistant is stopping.
+        if not connected and not hass.is_stopping:
             for coordinator in coordinators.values():
                 hass.async_create_task(coordinator.async_request_refresh())
 
