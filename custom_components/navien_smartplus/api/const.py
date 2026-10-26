@@ -1,7 +1,5 @@
 """Constants for the Navien Smart Plus (UK) cloud protocol. See docs/protocol.md."""
 
-from __future__ import annotations
-
 from enum import IntEnum
 
 API_BASE_URL = "https://spuk.naviensmartcontrol.com"

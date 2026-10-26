@@ -1,13 +1,11 @@
 """High-level client for the Navien Smart Plus (UK) cloud."""
 
-from __future__ import annotations
-
 import asyncio
 from collections.abc import Callable
 import logging
 import ssl
 import time
-from typing import Any
+from typing import TYPE_CHECKING, Any
 import uuid
 
 import aiohttp
@@ -29,6 +27,7 @@ from .models import (
     DeviceFeatures,
     DeviceStatus,
     HeatingSchedule,
+    Session,
     UsageRecord,
 )
 from .mqtt import NavienMqtt
@@ -57,13 +56,13 @@ class NavienSmartPlusClient:
         client_id: str | None = None,
         ssl_context: ssl.SSLContext | None = None,
     ) -> None:
+        """Set up the client; nothing is sent until the first call."""
         self._rest = NavienRestClient(session)
         self._email = email
         self._password = password
         self._client_id = client_id or str(uuid.uuid4())
         self._ssl_context = ssl_context
-        self.account: Account | None = None
-        self.auth: AuthInfo | None = None
+        self.session: Session | None = None
         self.devices: list[Device] = []
         self._mqtt: NavienMqtt | None = None
         self._closing = False
@@ -75,55 +74,64 @@ class NavienSmartPlusClient:
 
     @property
     def connected(self) -> bool:
+        """Whether the MQTT connection is up."""
         return bool(self._mqtt and self._mqtt.connected)
 
-    # ---- auth -------------------------------------------------------------
-
     async def login(self) -> Account:
-        self.account, self.auth = await self._rest.sign_in(self._email, self._password)
-        _LOGGER.debug("Signed in as userSeq=%s familySeq=%s", self.account.user_seq, self.account.family_seq)
-        return self.account
+        """Sign in with the app login and return the account."""
+        return (await self._sign_in()).account
 
-    async def _ensure_auth(self) -> tuple[Account, AuthInfo]:
-        if not self.account or not self.auth:
-            await self.login()
-        assert self.account and self.auth
-        if time.time() > self.auth.access_token_expires_at - _REFRESH_MARGIN:
+    async def _sign_in(self) -> Session:
+        self.session = await self._rest.sign_in(self._email, self._password)
+        account = self.session.account
+        _LOGGER.debug(
+            "Signed in as userSeq=%s familySeq=%s", account.user_seq, account.family_seq
+        )
+        return self.session
+
+    async def _valid_session(self) -> Session:
+        """Sign in if needed, and refresh an access token that is about to expire."""
+        session = self.session or await self._sign_in()
+        auth = session.auth
+        if time.time() < auth.access_token_expires_at - _REFRESH_MARGIN:
+            return session
+        if auth.refresh_token:
             try:
-                if self.auth.refresh_token:
-                    self.auth.access_token = await self._rest.refresh_access_token(self.auth.refresh_token)
-                    self.auth.obtained_at = time.time()
-                else:
-                    await self.login()
+                auth.access_token = await self._rest.refresh_access_token(
+                    auth.refresh_token
+                )
             except NavienError:
                 _LOGGER.debug("Token refresh failed, signing in again")
-                await self.login()
-        assert self.account and self.auth
-        return self.account, self.auth
+            else:
+                auth.obtained_at = time.time()
+                return session
+        return await self._sign_in()
 
     async def _fresh_aws_credentials(self) -> AuthInfo:
-        account, auth = await self._ensure_auth()
-        if time.time() > auth.aws_credentials_expire_at - _REFRESH_MARGIN:
-            try:
-                self.auth = await self._rest.refresh_session(auth.access_token, account.email, auth)
-            except NavienError:
-                _LOGGER.debug("Session refresh failed, signing in again")
-                await self.login()
-        assert self.auth
-        return self.auth
+        session = await self._valid_session()
+        if time.time() < session.auth.aws_credentials_expire_at - _REFRESH_MARGIN:
+            return session.auth
+        try:
+            session.auth = await self._rest.refresh_session(
+                session.auth.access_token, session.account.email, session.auth
+            )
+        except NavienError:
+            _LOGGER.debug("Session refresh failed, signing in again")
+            session = await self._sign_in()
+        return session.auth
 
     async def async_get_devices(self) -> list[Device]:
-        account, auth = await self._ensure_auth()
-        self.devices = await self._rest.get_devices(auth.access_token, account)
+        """List the account's Smart Plus modules."""
+        session = await self._valid_session()
+        self.devices = await self._rest.get_devices(
+            session.auth.access_token, session.account
+        )
         return self.devices
 
-    # ---- MQTT connection --------------------------------------------------
-
-    def _subscriptions(self) -> list[str]:
-        assert self.account
+    def _subscriptions(self, account: Account) -> list[str]:
         topics: list[str] = []
         for device in self.devices:
-            t, m, f = device.device_type, MQTT_NSP + device.mac, self.account.family_seq
+            t, m, f = device.device_type, MQTT_NSP + device.mac, account.family_seq
             topics += [
                 f"cmd/{t}/{f}/+/+/res",
                 f"cmd/{t}/{f}/+/+/res/did",
@@ -152,29 +160,41 @@ class NavienSmartPlusClient:
                     None, ssl.create_default_context
                 )
             self._closing = False
-            self._mqtt = NavienMqtt(self._client_id, self._on_message, self._on_disconnect, self._ssl_context)
-            await self._mqtt.connect(auth, self._subscriptions())
+            self._mqtt = NavienMqtt(
+                self._client_id,
+                self._on_message,
+                self._on_disconnect,
+                self._ssl_context,
+            )
+            if TYPE_CHECKING:
+                assert self.session is not None
+            await self._mqtt.connect(auth, self._subscriptions(self.session.account))
         for listener in self._connection_listeners:
             listener(True)
 
     def _on_disconnect(self, error: Exception | None) -> None:
         if self._closing:
             return
-        _LOGGER.info("Navien MQTT disconnected: %s", error)
+        _LOGGER.debug("MQTT disconnected, reconnecting on the next request: %s", error)
         for listener in self._connection_listeners:
             listener(False)
 
     async def async_close(self) -> None:
+        """Disconnect MQTT."""
         self._closing = True
         if self._mqtt:
             await self._mqtt.disconnect()
             self._mqtt = None
 
     def add_status_listener(self, listener: StatusListener) -> Callable[[], None]:
+        """Call `listener` with every status pushed for another client; returns a remover."""
         self._status_listeners.append(listener)
         return lambda: self._status_listeners.remove(listener)
 
-    def add_connection_listener(self, listener: ConnectionListener) -> Callable[[], None]:
+    def add_connection_listener(
+        self, listener: ConnectionListener
+    ) -> Callable[[], None]:
+        """Call `listener` when MQTT connects or drops; returns a remover."""
         self._connection_listeners.append(listener)
         return lambda: self._connection_listeners.remove(listener)
 
@@ -191,9 +211,12 @@ class NavienSmartPlusClient:
         for raw_listener in list(self._raw_listeners):
             raw_listener(topic, data)
         if answered:
-            return  # a reply to our own request; its caller handles it
+            # A reply to one of our own requests is handled by its caller.
+            return
         response = data.get("response")
-        if not isinstance(response, dict) or not isinstance(response.get("status"), dict):
+        if not isinstance(response, dict) or not isinstance(
+            response.get("status"), dict
+        ):
             return
         if (device := self._device_for_mac(response.get("macAddress"))) is None:
             return
@@ -201,13 +224,21 @@ class NavienSmartPlusClient:
         for listener in list(self._status_listeners):
             listener(device, status)
 
-    # ---- requests ---------------------------------------------------------
-
-    def _envelope(self, device: Device, request_suffix: str, response_suffix: str, request: dict[str, Any]) -> tuple[str, dict[str, Any]]:
-        assert self.account and self._mqtt
+    def _envelope(
+        self,
+        device: Device,
+        request_suffix: str,
+        response_suffix: str,
+        request: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Build the request envelope; `requestTopic` is where it's published."""
+        if TYPE_CHECKING:
+            assert self.session is not None
+            assert self._mqtt is not None
+        account = self.session.account
         t = device.device_type
         request_topic = f"cmd/{t}/{MQTT_NSP}{device.mac}{request_suffix}"
-        response_topic = f"cmd/{t}/{self.account.family_seq}/{self.account.user_seq}/{self._client_id}{response_suffix}"
+        response_topic = f"cmd/{t}/{account.family_seq}/{account.user_seq}/{self._client_id}{response_suffix}"
         payload = {
             "protocolVersion": MQTT_PROTOCOL_VERSION,
             "clientID": self._client_id,
@@ -221,22 +252,33 @@ class NavienSmartPlusClient:
                 **request,
             },
         }
-        return request_topic, payload
+        return payload
 
     async def _request(
-        self, device: Device, request_suffix: str, response_suffix: str, request: dict[str, Any], *, control: bool = False
+        self,
+        device: Device,
+        request_suffix: str,
+        response_suffix: str,
+        request: dict[str, Any],
+        *,
+        control: bool = False,
     ) -> dict[str, Any]:
         """Send one request and return the reply's `response` object."""
         if not self.connected:
             await self.async_connect()
         # Each module handles one request at a time and can take 20+ s when busy, so never overlap its requests.
         async with self._request_locks.setdefault(device.device_id, asyncio.Lock()):
-            topic, payload = self._envelope(device, request_suffix, response_suffix, request)
+            payload = self._envelope(device, request_suffix, response_suffix, request)
             reply_topics = [payload["responseTopic"]]
             if control:
-                reply_topics.append(f"cmd/{device.device_type}/{MQTT_NSP}{device.mac}/res/ctrl-fail")
-            assert self._mqtt
-            reply = await self._mqtt.request(topic, payload, reply_topics, REQUEST_TIMEOUT)
+                reply_topics.append(
+                    f"cmd/{device.device_type}/{MQTT_NSP}{device.mac}/res/ctrl-fail"
+                )
+            if TYPE_CHECKING:
+                assert self._mqtt is not None
+            reply = await self._mqtt.request(
+                payload["requestTopic"], payload, reply_topics, REQUEST_TIMEOUT
+            )
         response = reply.get("response")
         if not isinstance(response, dict):
             return {}
@@ -245,47 +287,82 @@ class NavienSmartPlusClient:
         return response
 
     async def async_get_features(self, device: Device) -> DeviceFeatures:
+        """Read the module's capabilities and software versions."""
         response = await self._request(
-            device, "/st/start", "/res/did", {"command": Command.STATUS_START, "zoneUseSetting": ZONE_MASK[1]}
+            device,
+            "/st/start",
+            "/res/did",
+            {"command": Command.STATUS_START, "zoneUseSetting": ZONE_MASK[1]},
         )
         return DeviceFeatures(raw=response.get("feature") or {})
 
     async def async_get_status(self, device: Device, zone_id: int = 1) -> DeviceStatus:
+        """Read the status of the boiler, hot water and all zones."""
         response = await self._request(
-            device, "/st", "/res", {"command": Command.STATUS_GET, "zoneUseSetting": ZONE_MASK.get(zone_id, 1)}
+            device,
+            "/st",
+            "/res",
+            {
+                "command": Command.STATUS_GET,
+                "zoneUseSetting": ZONE_MASK.get(zone_id, 1),
+            },
         )
         if not isinstance(status := response.get("status"), dict):
             raise NavienConnectionError("Status reply had no status")
         return DeviceStatus.from_json(status)
 
-    async def async_get_heating_schedules(self, device: Device) -> dict[int, HeatingSchedule]:
+    async def async_get_heating_schedules(
+        self, device: Device
+    ) -> dict[int, HeatingSchedule]:
         """Weekly heating schedule of every zone, keyed by zone id."""
         response = await self._request(
-            device, "/st/heat-reserv-query/rd", "/res/heat-reserv/rd",
+            device,
+            "/st/heat-reserv-query/rd",
+            "/res/heat-reserv/rd",
             {"command": Command.STATUS_GET_INSIDE_RSV, "zoneUseSetting": ZONE_MASK[1]},
         )
-        schedules = [HeatingSchedule.from_json(z) for z in response.get("heatingReservation") or []]
+        schedules = [
+            HeatingSchedule.from_json(z)
+            for z in response.get("heatingReservation") or []
+        ]
         return {s.zone_id: s for s in schedules}
 
-    async def async_get_daily_usage(self, device: Device, year: int, month: int) -> list[UsageRecord]:
+    async def async_get_daily_usage(
+        self, device: Device, year: int, month: int
+    ) -> list[UsageRecord]:
         """One record per day of the month. Days not finished yet read 0."""
         response = await self._request(
-            device, "/st/fuel-usage-daily-query/rd", "/res/fuel-usage-daily-query/rd",
+            device,
+            "/st/fuel-usage-daily-query/rd",
+            "/res/fuel-usage-daily-query/rd",
             {"command": Command.STATUS_DAILY_USAGE, "year": year, "month": month},
         )
         return [UsageRecord.from_json(r) for r in response.get("usage") or []]
 
-    async def async_get_monthly_usage(self, device: Device, year: int) -> list[UsageRecord]:
+    async def async_get_monthly_usage(
+        self, device: Device, year: int
+    ) -> list[UsageRecord]:
         """One record per month of the year (monthly rows carry no `day`)."""
         response = await self._request(
-            device, "/st/fuel-usage-monthly-query/rd", "/res/fuel-usage-monthly-query/rd",
+            device,
+            "/st/fuel-usage-monthly-query/rd",
+            "/res/fuel-usage-monthly-query/rd",
             {"command": Command.STATUS_MONTHLY_USAGE, "year": year},
         )
         return [UsageRecord.from_json(r) for r in response.get("usage") or []]
 
-    async def _control(self, device: Device, zone_id: int, command: Command, mode: str, params: list[int]) -> DeviceStatus | None:
+    async def _control(
+        self,
+        device: Device,
+        zone_id: int,
+        command: Command,
+        mode: str,
+        params: list[int],
+    ) -> DeviceStatus | None:
         response = await self._request(
-            device, "/ctrl", "/res",
+            device,
+            "/ctrl",
+            "/res",
             {
                 "command": command,
                 "mode": mode,
@@ -298,24 +375,61 @@ class NavienSmartPlusClient:
         status = response.get("status")
         return DeviceStatus.from_json(status) if isinstance(status, dict) else None
 
-    async def async_set_zone_mode(self, device: Device, zone_id: int, mode: HeatingMode, temperature: float) -> DeviceStatus | None:
-        params = [int(mode)] if mode == HeatingMode.AUTO else [int(mode), round(temperature * 2)]
-        return await self._control(device, zone_id, Command.CTRL_HEAT_INSIDE, ControlMode.HEAT_MODE, params)
-
-    async def async_set_zone_temperature(self, device: Device, zone_id: int, temperature: float, current_mode: HeatingMode | int) -> DeviceStatus | None:
-        """Change the setpoint the way the app does for the zone's current mode."""
-        if current_mode == HeatingMode.AUTO:  # starts an override until the next program slot
-            return await self.async_set_zone_mode(device, zone_id, HeatingMode.OVERRIDE, temperature)
-        if current_mode == HeatingMode.BOOST:  # leaves boost for manual heating
-            return await self.async_set_zone_mode(device, zone_id, HeatingMode.ON, temperature)
+    async def async_set_zone_mode(
+        self, device: Device, zone_id: int, mode: HeatingMode, temperature: float
+    ) -> DeviceStatus | None:
+        """Set a zone's heating mode; the setpoint is sent with every mode except Auto."""
+        params = (
+            [int(mode)]
+            if mode == HeatingMode.AUTO
+            else [int(mode), round(temperature * 2)]
+        )
         return await self._control(
-            device, zone_id, Command.CTRL_SET_INSIDE_TEMP, ControlMode.INSIDE_HEAT, [round(temperature * 2)]
+            device, zone_id, Command.CTRL_HEAT_INSIDE, ControlMode.HEAT_MODE, params
         )
 
-    async def async_set_hot_water_mode(self, device: Device, mode: HotWaterMode) -> DeviceStatus | None:
-        return await self._control(device, 1, Command.CTRL_HOT_WATER, ControlMode.DHW_MODE, [int(mode)])
+    async def async_set_zone_temperature(
+        self,
+        device: Device,
+        zone_id: int,
+        temperature: float,
+        current_mode: HeatingMode | int,
+    ) -> DeviceStatus | None:
+        """Change the setpoint the way the app does for the zone's current mode."""
+        if current_mode == HeatingMode.AUTO:
+            # This starts an override until the next program slot.
+            return await self.async_set_zone_mode(
+                device, zone_id, HeatingMode.OVERRIDE, temperature
+            )
+        if current_mode == HeatingMode.BOOST:
+            # This leaves boost for manual heating.
+            return await self.async_set_zone_mode(
+                device, zone_id, HeatingMode.ON, temperature
+            )
+        return await self._control(
+            device,
+            zone_id,
+            Command.CTRL_SET_INSIDE_TEMP,
+            ControlMode.INSIDE_HEAT,
+            [round(temperature * 2)],
+        )
 
-    async def async_set_holiday(self, device: Device, zone_id: int, enabled: bool) -> DeviceStatus | None:
+    async def async_set_hot_water_mode(
+        self, device: Device, mode: HotWaterMode
+    ) -> DeviceStatus | None:
+        """Set the hot water mode."""
+        return await self._control(
+            device, 1, Command.CTRL_HOT_WATER, ControlMode.DHW_MODE, [int(mode)]
+        )
+
+    async def async_set_holiday(
+        self, device: Device, zone_id: int, enabled: bool
+    ) -> DeviceStatus | None:
+        """Turn holiday mode on or off for a zone."""
         if enabled:
-            return await self._control(device, zone_id, Command.CTRL_HOLIDAY_ON, ControlMode.HOLIDAY_ON, [2])
-        return await self._control(device, zone_id, Command.CTRL_HOLIDAY_OFF, ControlMode.HOLIDAY_OFF, [1])
+            return await self._control(
+                device, zone_id, Command.CTRL_HOLIDAY_ON, ControlMode.HOLIDAY_ON, [2]
+            )
+        return await self._control(
+            device, zone_id, Command.CTRL_HOLIDAY_OFF, ControlMode.HOLIDAY_OFF, [1]
+        )

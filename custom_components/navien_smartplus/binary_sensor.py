@@ -1,7 +1,5 @@
 """Binary sensors for Navien Smart Plus."""
 
-from __future__ import annotations
-
 from collections.abc import Callable
 from dataclasses import dataclass
 
@@ -23,6 +21,8 @@ PARALLEL_UPDATES = 0
 
 @dataclass(frozen=True, kw_only=True)
 class NavienBinarySensorDescription(BinarySensorEntityDescription):
+    """Describes a binary sensor read from the module's status."""
+
     value_fn: Callable[[DeviceStatus], bool]
 
 
@@ -53,6 +53,7 @@ async def async_setup_entry(
     entry: NavienConfigEntry,
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
+    """Set up the binary sensors."""
     async_add_entities(
         NavienBinarySensor(coordinator, description)
         for coordinator in entry.runtime_data.coordinators.values()
@@ -61,12 +62,16 @@ async def async_setup_entry(
 
 
 class NavienBinarySensor(NavienEntity, BinarySensorEntity):
+    """A binary sensor read from the module's status."""
+
     entity_description: NavienBinarySensorDescription
 
-    def __init__(self, coordinator: NavienCoordinator, description: NavienBinarySensorDescription) -> None:
+    def __init__(
+        self, coordinator: NavienCoordinator, description: NavienBinarySensorDescription
+    ) -> None:
+        """Set up the sensor for one module."""
         super().__init__(coordinator, description.key)
         self.entity_description = description
 
-    @property
-    def is_on(self) -> bool:
-        return self.entity_description.value_fn(self.status)
+    def _update_attrs(self) -> None:
+        self._attr_is_on = self.entity_description.value_fn(self.status)

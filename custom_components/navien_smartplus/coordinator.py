@@ -1,7 +1,6 @@
 """Data update coordinators for Navien Smart Plus."""
 
-from __future__ import annotations
-
+from collections.abc import Awaitable
 from dataclasses import asdict, dataclass, replace
 from datetime import date, datetime
 from typing import TYPE_CHECKING, Any
@@ -64,6 +63,7 @@ class NavienCoordinator(DataUpdateCoordinator[NavienData]):
         client: NavienSmartPlusClient,
         device: Device,
     ) -> None:
+        """Set up polling for one module."""
         super().__init__(
             hass,
             LOGGER,
@@ -76,18 +76,19 @@ class NavienCoordinator(DataUpdateCoordinator[NavienData]):
         self._schedules_at: datetime | None = None
 
     async def _async_update_data(self) -> NavienData:
+        """Poll status; read device info once and the schedule when it's due."""
         previous = self.data
-        try:
-            features = previous.features if previous else await self.client.async_get_features(self.device)
-            status = await self.client.async_get_status(self.device)
-            schedules = previous.schedules if previous else {}
-            if self._schedule_due(status):
-                schedules = await self.client.async_get_heating_schedules(self.device)
-                self._schedules_at = dt_util.utcnow()
-        except NavienAuthError as err:
-            raise ConfigEntryAuthFailed(str(err)) from err
-        except NavienError as err:
-            raise UpdateFailed(str(err)) from err
+        if previous:
+            features = previous.features
+        else:
+            features = await _cloud(self.client.async_get_features(self.device))
+        status = await _cloud(self.client.async_get_status(self.device))
+        schedules = previous.schedules if previous else {}
+        if self._schedule_due(status):
+            schedules = await _cloud(
+                self.client.async_get_heating_schedules(self.device)
+            )
+            self._schedules_at = dt_util.utcnow()
         return NavienData(status=status, features=features, schedules=schedules)
 
     def _schedule_due(self, status: DeviceStatus) -> bool:
@@ -96,8 +97,12 @@ class NavienCoordinator(DataUpdateCoordinator[NavienData]):
             return True
         if dt_util.utcnow() - self._schedules_at > SCHEDULE_INTERVAL:
             return True
-        previous = {z.zone_id: z.program_number for z in self.data.status.zones.values()}
-        return any(previous.get(z.zone_id) != z.program_number for z in status.zones.values())
+        previous = {
+            z.zone_id: z.program_number for z in self.data.status.zones.values()
+        }
+        return any(
+            previous.get(z.zone_id) != z.program_number for z in status.zones.values()
+        )
 
     @callback
     def async_handle_status(self, device: Device, status: DeviceStatus) -> None:
@@ -136,6 +141,7 @@ class NavienUsageCoordinator(DataUpdateCoordinator[UsageRecord]):
         client: NavienSmartPlusClient,
         device: Device,
     ) -> None:
+        """Set up usage polling for one module."""
         super().__init__(
             hass,
             LOGGER,
@@ -151,49 +157,69 @@ class NavienUsageCoordinator(DataUpdateCoordinator[UsageRecord]):
         self._days: dict[date, UsageRecord] | None = None
 
     async def _async_update_data(self) -> UsageRecord:
+        """Fetch this year's totals, and new daily history when the totals have moved on."""
         today = dt_util.now().date()
         changed_since: date | None = None
-        try:
-            if self._days is None:
-                stored = await self._store.async_load() or {}
-                self._days = {date.fromisoformat(k): UsageRecord(**v) for k, v in stored.get("days", {}).items()}
-                if not self._days:
-                    changed_since = await self._fetch_days(_months_back(today, USAGE_BACKFILL_MONTHS), today)
-            monthly = await self.client.async_get_monthly_usage(self.device, today.year)
-            # Last month too for the first few days, while its final days are still being filled in.
-            for year, month in _months_back(today, 2 if today.day <= 3 else 1):
-                if self._cached_month_matches(year, month, monthly):
-                    continue
-                if (since := await self._fetch_days([(year, month)], today)) is not None:
-                    changed_since = min(changed_since or since, since)
-        except NavienAuthError as err:
-            raise ConfigEntryAuthFailed(str(err)) from err
-        except NavienError as err:
-            raise UpdateFailed(str(err)) from err
+        if self._days is None:
+            stored = await self._store.async_load() or {}
+            self._days = {
+                date.fromisoformat(k): UsageRecord(**v)
+                for k, v in stored.get("days", {}).items()
+            }
+            if not self._days:
+                changed_since = await self._fetch_days(
+                    _months_back(today, USAGE_BACKFILL_MONTHS), today
+                )
+        monthly = await _cloud(
+            self.client.async_get_monthly_usage(self.device, today.year)
+        )
+        # Check last month too for the first few days, while its final days are still being filled in.
+        for year, month in _months_back(today, 2 if today.day <= 3 else 1):
+            if self._cached_month_matches(year, month, monthly):
+                continue
+            if (since := await self._fetch_days([(year, month)], today)) is not None:
+                changed_since = min(changed_since or since, since)
 
         if changed_since is not None:
-            await self._store.async_save({"days": {d.isoformat(): asdict(r) for d, r in self._days.items()}})
+            await self._store.async_save(
+                {"days": {d.isoformat(): asdict(r) for d, r in self._days.items()}}
+            )
             self._import_statistics(changed_since)
         return UsageRecord.year_total(today.year, monthly)
 
-    def _cached_month_matches(self, year: int, month: int, monthly: list[UsageRecord]) -> bool:
+    def _cached_month_matches(
+        self, year: int, month: int, monthly: list[UsageRecord]
+    ) -> bool:
         """Whether the cached days add up to the module's total for that month (only known for this year)."""
-        assert self._days is not None
+        if TYPE_CHECKING:
+            assert self._days is not None
         total = next((r for r in monthly if (r.year, r.month) == (year, month)), None)
         if total is None:
             return False
-        cached = UsageRecord.year_total(year, [r for d, r in self._days.items() if (d.year, d.month) == (year, month)])
-        return (cached.heating_usage, cached.hot_water_usage) == (total.heating_usage, total.hot_water_usage)
+        cached = UsageRecord.year_total(
+            year,
+            [r for d, r in self._days.items() if (d.year, d.month) == (year, month)],
+        )
+        return (cached.heating_usage, cached.hot_water_usage) == (
+            total.heating_usage,
+            total.hot_water_usage,
+        )
 
-    async def _fetch_days(self, months: list[tuple[int, int]], today: date) -> date | None:
+    async def _fetch_days(
+        self, months: list[tuple[int, int]], today: date
+    ) -> date | None:
         """Fetch the finished days of the given months into the cache. Returns the earliest day that changed."""
-        assert self._days is not None
+        if TYPE_CHECKING:
+            assert self._days is not None
         earliest: date | None = None
         for year, month in months:
-            for record in await self.client.async_get_daily_usage(self.device, year, month):
+            for record in await _cloud(
+                self.client.async_get_daily_usage(self.device, year, month)
+            ):
                 day = record.date
                 if day >= today:
-                    continue  # not finished yet; reads 0 until the day is over
+                    # Unfinished days read 0 until they are over.
+                    continue
                 if self._days.get(day) != record:
                     self._days[day] = record
                     earliest = min(earliest or day, day)
@@ -201,9 +227,12 @@ class NavienUsageCoordinator(DataUpdateCoordinator[UsageRecord]):
 
     def _import_statistics(self, since: date) -> None:
         """Write one statistic row per finished day from `since`, at local midnight, with sums from the first day."""
-        assert self._days is not None
+        if TYPE_CHECKING:
+            assert self._days is not None
         days = sorted(self._days.items())
-        starts = {day: dt_util.start_of_local_day(day) for day, _ in days if day >= since}
+        starts = {
+            day: dt_util.start_of_local_day(day) for day, _ in days if day >= since
+        }
         for suffix, (attr, label) in USAGE_STATISTICS.items():
             running = 0.0
             rows: list[StatisticData] = []
@@ -211,7 +240,9 @@ class NavienUsageCoordinator(DataUpdateCoordinator[UsageRecord]):
                 value = float(getattr(record, attr))
                 running += value
                 if day in starts:
-                    rows.append(StatisticData(start=starts[day], state=value, sum=running))
+                    rows.append(
+                        StatisticData(start=starts[day], state=value, sum=running)
+                    )
             metadata = StatisticMetaData(
                 mean_type=StatisticMeanType.NONE,
                 has_sum=True,
@@ -223,6 +254,16 @@ class NavienUsageCoordinator(DataUpdateCoordinator[UsageRecord]):
             )
             async_add_external_statistics(self.hass, metadata, rows)
         LOGGER.debug("Imported %s days of gas statistics from %s", len(starts), since)
+
+
+async def _cloud[T](request: Awaitable[T]) -> T:
+    """Run one cloud request, turning its errors into coordinator errors."""
+    try:
+        return await request
+    except NavienAuthError as err:
+        raise ConfigEntryAuthFailed(str(err)) from err
+    except NavienError as err:
+        raise UpdateFailed(str(err)) from err
 
 
 def _months_back(today: date, count: int) -> list[tuple[int, int]]:
@@ -238,8 +279,10 @@ def _months_back(today: date, count: int) -> list[tuple[int, int]]:
 
 
 def usage_statistic_id(mac: str, suffix: str) -> str:
+    """The long-term statistic ID for one gas series of a module."""
     return f"{DOMAIN}:{mac}_{suffix}"
 
 
 def usage_store(hass: HomeAssistant, device_id: str) -> Store[dict[str, Any]]:
+    """The store holding a module's cached daily usage."""
     return Store(hass, 1, f"{DOMAIN}.usage.{device_id}")

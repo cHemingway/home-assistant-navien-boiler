@@ -2,15 +2,21 @@
 name = "home-assistant-navien-smartplus"
 version = "0.1.0"
 description = "Home Assistant integration for Navien Smart Plus (UK) boilers"
-requires-python = ">=3.13"
+requires-python = ">=3.14"
 
 [tool.ruff]
-target-version = "py313"
-line-length = 120
+target-version = "py314"
 
 [tool.ruff.lint]
-select = ["E", "F", "W", "I", "UP", "B", "SIM", "RUF"]
+select = ["B", "D", "E", "F", "I", "RUF", "SIM", "UP", "W"]
 ignore = ["E501", "RUF012"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.per-file-ignores]
+# Development scripts, not part of the integration.
+"scripts/*" = ["D"]
 
 [tool.ruff.lint.isort]
 force-sort-within-sections = true

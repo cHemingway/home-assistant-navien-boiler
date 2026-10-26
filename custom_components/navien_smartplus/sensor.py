@@ -1,7 +1,5 @@
 """Sensors for Navien Smart Plus."""
 
-from __future__ import annotations
-
 from collections.abc import Callable
 from dataclasses import dataclass
 
@@ -11,7 +9,12 @@ from homeassistant.components.sensor import (
     SensorEntityDescription,
     SensorStateClass,
 )
-from homeassistant.const import EntityCategory, UnitOfTemperature, UnitOfTime, UnitOfVolume
+from homeassistant.const import (
+    EntityCategory,
+    UnitOfTemperature,
+    UnitOfTime,
+    UnitOfVolume,
+)
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.typing import StateType
@@ -26,6 +29,8 @@ PARALLEL_UPDATES = 0
 
 @dataclass(frozen=True, kw_only=True)
 class NavienStatusSensorDescription(SensorEntityDescription):
+    """Describes a sensor read from the module's status."""
+
     value_fn: Callable[[DeviceStatus], StateType]
     exists_fn: Callable[[DeviceStatus], bool] = lambda _: True
 
@@ -51,6 +56,8 @@ STATUS_SENSORS: tuple[NavienStatusSensorDescription, ...] = (
 
 @dataclass(frozen=True, kw_only=True)
 class NavienUsageSensorDescription(SensorEntityDescription):
+    """Describes a sensor read from the year's usage totals."""
+
     value_fn: Callable[[UsageRecord], StateType]
 
 
@@ -111,6 +118,7 @@ async def async_setup_entry(
     entry: NavienConfigEntry,
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
+    """Set up the status sensors, and the usage sensors where fuel usage is reported."""
     entities: list[SensorEntity] = [
         NavienStatusSensor(coordinator, description)
         for coordinator in entry.runtime_data.coordinators.values()
@@ -118,29 +126,44 @@ async def async_setup_entry(
         if description.exists_fn(coordinator.data.status)
     ]
     for usage in entry.runtime_data.usage.values():
-        entities += [NavienUsageSensor(usage, description) for description in USAGE_SENSORS]
+        entities += [
+            NavienUsageSensor(usage, description) for description in USAGE_SENSORS
+        ]
     async_add_entities(entities)
 
 
 class NavienStatusSensor(NavienEntity, SensorEntity):
+    """A sensor read from the module's status."""
+
     entity_description: NavienStatusSensorDescription
 
-    def __init__(self, coordinator: NavienCoordinator, description: NavienStatusSensorDescription) -> None:
+    def __init__(
+        self, coordinator: NavienCoordinator, description: NavienStatusSensorDescription
+    ) -> None:
+        """Set up the sensor for one module."""
         super().__init__(coordinator, description.key)
         self.entity_description = description
 
-    @property
-    def native_value(self) -> StateType:
-        return self.entity_description.value_fn(self.status)
+    def _update_attrs(self) -> None:
+        self._attr_native_value = self.entity_description.value_fn(self.status)
 
 
 class NavienUsageSensor(NavienUsageEntity, SensorEntity):
+    """A sensor read from the year's usage totals."""
+
     entity_description: NavienUsageSensorDescription
 
-    def __init__(self, coordinator: NavienUsageCoordinator, description: NavienUsageSensorDescription) -> None:
+    def __init__(
+        self,
+        coordinator: NavienUsageCoordinator,
+        description: NavienUsageSensorDescription,
+    ) -> None:
+        """Set up the sensor for one module."""
         super().__init__(coordinator, description.key)
         self.entity_description = description
 
-    @property
-    def native_value(self) -> StateType:
-        return self.entity_description.value_fn(self.coordinator.data)
+    def _update_attrs(self) -> None:
+        if self.coordinator.data is not None:
+            self._attr_native_value = self.entity_description.value_fn(
+                self.coordinator.data
+            )

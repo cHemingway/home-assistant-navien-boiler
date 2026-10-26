@@ -6,8 +6,6 @@ Core integrations get this done by Home Assistant's build scripts; custom integr
     python scripts/gen_translations.py --check  # fail if en.json is out of date
 """
 
-from __future__ import annotations
-
 import json
 from pathlib import Path
 import re
@@ -20,7 +18,10 @@ INTEGRATION = ROOT / "custom_components" / "navien_smartplus"
 
 
 def build() -> str:
-    common = json.loads((Path(homeassistant.__file__).parent / "strings.json").read_text())
+    """Return strings.json with every `[%key:...%]` reference replaced by its English text."""
+    common = json.loads(
+        (Path(homeassistant.__file__).parent / "strings.json").read_text()
+    )
 
     def resolve(match: re.Match[str]) -> str:
         node = common
@@ -28,15 +29,20 @@ def build() -> str:
             node = node[part]
         return node
 
-    return re.sub(r"\[%key:([^%]+)%\]", resolve, (INTEGRATION / "strings.json").read_text())
+    return re.sub(
+        r"\[%key:([^%]+)%\]", resolve, (INTEGRATION / "strings.json").read_text()
+    )
 
 
 def main() -> None:
+    """Write en.json, or with --check fail if it's out of date."""
     target = INTEGRATION / "translations" / "en.json"
     content = build()
     if "--check" in sys.argv:
         if not target.exists() or target.read_text() != content:
-            sys.exit("translations/en.json is out of date; run scripts/gen_translations.py")
+            sys.exit(
+                "translations/en.json is out of date; run scripts/gen_translations.py"
+            )
         return
     target.parent.mkdir(exist_ok=True)
     target.write_text(content)

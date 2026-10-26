@@ -1,7 +1,5 @@
 """The Navien Smart Plus integration."""
 
-from __future__ import annotations
-
 from dataclasses import dataclass
 
 from homeassistant.components.recorder import get_instance
@@ -64,9 +62,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: NavienConfigEntry) -> bo
 
     macs = {d.device_id: d.mac for d in client.devices}
     if entry.data.get(CONF_DEVICE_MACS) != macs:
-        hass.config_entries.async_update_entry(entry, data={**entry.data, CONF_DEVICE_MACS: macs})
+        hass.config_entries.async_update_entry(
+            entry, data={**entry.data, CONF_DEVICE_MACS: macs}
+        )
 
-    coordinators = {d.device_id: NavienCoordinator(hass, entry, client, d) for d in client.devices}
+    coordinators = {
+        d.device_id: NavienCoordinator(hass, entry, client, d) for d in client.devices
+    }
     for coordinator in coordinators.values():
         await coordinator.async_config_entry_first_refresh()
     usage = {
@@ -74,10 +76,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: NavienConfigEntry) -> bo
         for device_id, coordinator in coordinators.items()
         if coordinator.data.features.has_fuel_usage
     }
-    entry.runtime_data = NavienRuntimeData(client=client, coordinators=coordinators, usage=usage)
+    entry.runtime_data = NavienRuntimeData(
+        client=client, coordinators=coordinators, usage=usage
+    )
 
     for coordinator in coordinators.values():
-        entry.async_on_unload(client.add_status_listener(coordinator.async_handle_status))
+        entry.async_on_unload(
+            client.add_status_listener(coordinator.async_handle_status)
+        )
 
     def _connection_changed(connected: bool) -> None:
         # Reconnect promptly instead of waiting for the next poll.
@@ -92,7 +98,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: NavienConfigEntry) -> bo
     # Gas history can take a while on first setup (one request per month), so load it in the background.
     for usage_coordinator in usage.values():
         entry.async_create_background_task(
-            hass, usage_coordinator.async_refresh(), f"{DOMAIN} usage {usage_coordinator.device.device_id}"
+            hass,
+            usage_coordinator.async_refresh(),
+            f"{DOMAIN} usage {usage_coordinator.device.device_id}",
         )
     return True
 
@@ -105,7 +113,11 @@ async def async_unload_entry(hass: HomeAssistant, entry: NavienConfigEntry) -> b
 async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """Remove imported gas statistics and the usage cache along with the entry."""
     devices = entry.data.get(CONF_DEVICE_MACS, {})
-    statistic_ids = [usage_statistic_id(mac, suffix) for mac in devices.values() for suffix in USAGE_STATISTICS]
+    statistic_ids = [
+        usage_statistic_id(mac, suffix)
+        for mac in devices.values()
+        for suffix in USAGE_STATISTICS
+    ]
     if statistic_ids:
         get_instance(hass).async_clear_statistics(statistic_ids)
     for device_id in devices:

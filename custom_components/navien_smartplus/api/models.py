@@ -1,7 +1,5 @@
 """Data models parsed from Navien Smart Plus REST and MQTT payloads."""
 
-from __future__ import annotations
-
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 import time
@@ -35,10 +33,15 @@ class AuthInfo:
     obtained_at: float = field(default_factory=time.time)
 
     @classmethod
-    def from_json(cls, data: dict[str, Any], previous: AuthInfo | None = None) -> AuthInfo:
+    def from_json(
+        cls, data: dict[str, Any], previous: AuthInfo | None = None
+    ) -> AuthInfo:
+        """Parse an `authInfo` object, keeping the previous tokens for fields it leaves out."""
         return cls(
-            access_token=data.get("accessToken") or (previous.access_token if previous else ""),
-            refresh_token=data.get("refreshToken") or (previous.refresh_token if previous else None),
+            access_token=data.get("accessToken")
+            or (previous.access_token if previous else ""),
+            refresh_token=data.get("refreshToken")
+            or (previous.refresh_token if previous else None),
             access_key_id=data.get("accessKeyId", ""),
             secret_key=data.get("secretKey", ""),
             session_token=data.get("sessionToken", ""),
@@ -48,10 +51,12 @@ class AuthInfo:
 
     @property
     def access_token_expires_at(self) -> float:
+        """When the access token runs out, as a Unix time."""
         return self.obtained_at + (self.authentication_expires_in or 3600)
 
     @property
     def aws_credentials_expire_at(self) -> float:
+        """When the AWS credentials for MQTT run out, as a Unix time."""
         return self.obtained_at + (self.authorization_expires_in or 3600)
 
 
@@ -62,6 +67,14 @@ class Account:
     email: str
     user_seq: int
     family_seq: int
+
+
+@dataclass
+class Session:
+    """A signed-in account with its tokens and temporary AWS credentials."""
+
+    account: Account
+    auth: AuthInfo
 
 
 @dataclass
@@ -85,6 +98,7 @@ class Device:
 
     @classmethod
     def from_json(cls, data: dict[str, Any]) -> Device:
+        """Parse one entry of the REST device list."""
         return cls(
             device_seq=int(data.get("deviceSeq", 0)),
             device_id=str(data.get("deviceId", "")).lower(),
@@ -92,7 +106,10 @@ class Device:
             model_code=int(data.get("modelCode", 0)),
             is_connected=bool(data.get("isConnected")),
             zones=[
-                ZoneInfo(zone_id=int(z.get("zoneId", i + 1)), name=z.get("name") or f"Zone {i + 1}")
+                ZoneInfo(
+                    zone_id=int(z.get("zoneId", i + 1)),
+                    name=z.get("name") or f"Zone {i + 1}",
+                )
                 for i, z in enumerate(data.get("thermostats") or [])
             ],
         )
@@ -104,6 +121,7 @@ class Device:
 
     @property
     def additional_value(self) -> str:
+        """The 4 characters after the MAC in the device ID, sent as `additionalValue`."""
         return self.device_id[12:16]
 
 
@@ -119,12 +137,15 @@ class ZoneStatus:
     # and the real target comes from the schedule (see `target_temperature`).
     setting_temperature: float
     holiday: bool
-    program_number: int  # 1-6 = current slot of today's schedule, 0 = still in yesterday's last slot
-    program_type: int  # 1 = 7-day, 2 = 5/2, 3 = 5/1/1
+    # Current slot of today's schedule (1-6), or 0 while still in yesterday's last slot.
+    program_number: int
+    # Schedule layout: 1 = 7-day, 2 = 5/2, 3 = 5/1/1.
+    program_type: int
     raw: dict[str, Any]
 
     @classmethod
     def from_json(cls, data: dict[str, Any]) -> ZoneStatus:
+        """Parse one entry of a status reply's `thermostats` list."""
         return cls(
             zone_id=int(data.get("zoneId", 1)),
             mode=_enum(HeatingMode, data.get("insideOperationMode")),
@@ -137,10 +158,14 @@ class ZoneStatus:
             raw=data,
         )
 
-    def target_temperature(self, schedule: HeatingSchedule | None, now: datetime) -> float:
+    def target_temperature(
+        self, schedule: HeatingSchedule | None, now: datetime
+    ) -> float:
         """The target the app shows: the schedule's current slot in AUTO, otherwise the setting."""
         if self.mode == HeatingMode.AUTO and schedule is not None:
-            scheduled = schedule.scheduled_temperature(self.program_type, self.program_number, now)
+            scheduled = schedule.scheduled_temperature(
+                self.program_type, self.program_number, now
+            )
             if scheduled is not None:
                 return scheduled
         return self.setting_temperature
@@ -166,6 +191,7 @@ class HeatingSchedule:
 
     @classmethod
     def from_json(cls, data: dict[str, Any]) -> HeatingSchedule:
+        """Parse one zone of a `heatingReservation` reply."""
         days: dict[int, list[ScheduleSlot]] = {}
         for row in data.get("reservation") or []:
             days.setdefault(int(row.get("day", 0)), []).append(
@@ -188,21 +214,29 @@ class HeatingSchedule:
         The app re-indexes raw days to lists Monday = 0 … Sunday = 6 (ProgramViewModel.addHeatList), then picks
         a list by program type (MainViewModel.getWeekProgramListData). Both steps are reproduced here.
         """
-        weekday = day.weekday()  # Monday = 0 … Sunday = 6, same as the app's list index
-        if program_type == 1:  # 7-day: every day has its own list
+        # Monday = 0 … Sunday = 6, the same as the app's list index.
+        weekday = day.weekday()
+        if program_type == 1:
+            # 7-day: every day has its own list.
             app_list = weekday
-        elif program_type == 2:  # 5/2: weekdays read list 1, the weekend list 5
+        elif program_type == 2:
+            # 5/2: weekdays read list 1, the weekend list 5.
             app_list = 5 if weekday >= 5 else 1
-        elif program_type == 3:  # 5/1/1: weekdays read list 1, Saturday 5, Sunday 6
+        elif program_type == 3:
+            # 5/1/1: weekdays read list 1, Saturday list 5, Sunday list 6.
             app_list = {5: 5, 6: 6}.get(weekday, 1)
         else:
             app_list = 1
         return (app_list + 1) % 7
 
-    def scheduled_temperature(self, program_type: int, program_number: int, now: datetime) -> float | None:
+    def scheduled_temperature(
+        self, program_type: int, program_number: int, now: datetime
+    ) -> float | None:
         """Temperature of the slot the thermostat reports as current (slot 0 = yesterday's last slot)."""
         if program_number == 0:
-            slots = self.days.get(self.day_index(program_type, (now - timedelta(days=1)).date()), [])
+            slots = self.days.get(
+                self.day_index(program_type, (now - timedelta(days=1)).date()), []
+            )
             return slots[-1].temperature if slots else None
         slots = self.days.get(self.day_index(program_type, now.date()), [])
         if 0 < program_number <= len(slots):
@@ -224,12 +258,15 @@ class DeviceStatus:
 
     @classmethod
     def from_json(cls, status: dict[str, Any]) -> DeviceStatus:
+        """Parse a status reply's `status` object."""
         zones = [ZoneStatus.from_json(z) for z in status.get("thermostats") or []]
         return cls(
             burner_active=_on(status.get("operationBusy")),
             error_code=int(status.get("errorCode") or 0),
             outside_temperature=(
-                None if not status.get("regionCode") else status.get("outsideTemperature", 0) / 10
+                None
+                if not status.get("regionCode")
+                else status.get("outsideTemperature", 0) / 10
             ),
             dhw_mode=_enum(HotWaterMode, status.get("dhwOperationMode")),
             dhw_active=_on(status.get("dhwOperationBusy")),
@@ -255,6 +292,7 @@ class UsageRecord:
 
     @classmethod
     def from_json(cls, data: dict[str, Any]) -> UsageRecord:
+        """Parse one row of a daily or monthly usage reply."""
         return cls(
             year=int(data.get("year", 0)),
             month=int(data.get("month", 0)),
@@ -267,6 +305,7 @@ class UsageRecord:
 
     @classmethod
     def year_total(cls, year: int, records: list[UsageRecord]) -> UsageRecord:
+        """Add up `records` into one record for the year."""
         return cls(
             year=year,
             month=0,
@@ -279,10 +318,12 @@ class UsageRecord:
 
     @property
     def total_usage(self) -> int:
+        """Gas for heating and hot water together."""
         return self.heating_usage + self.hot_water_usage
 
     @property
     def date(self) -> date:
+        """The day of the record, or the first of its month for a monthly record."""
         return date(self.year, self.month, self.day or 1)
 
 
@@ -293,35 +334,43 @@ class DeviceFeatures:
     raw: dict[str, Any]
 
     def supported(self, key: str) -> bool:
+        """Whether the module reports `key` as supported."""
         return _on(self.raw.get(key))
 
     @property
     def has_hot_water(self) -> bool:
+        """Whether the boiler supplies hot water."""
         return self.supported("dhwUse")
 
     @property
     def has_holiday(self) -> bool:
+        """Whether holiday mode is available."""
         return self.supported("holidayUse")
 
     @property
     def has_fuel_usage(self) -> bool:
+        """Whether fuel usage history is available."""
         return self.supported("fuelUsageUse")
 
     @property
     def min_zone_temperature(self) -> float:
+        """Lowest room setpoint, in °C."""
         value = self.raw.get("insideTemperatureMin")
         return value / 2 if value else MIN_ZONE_TEMP
 
     @property
     def max_zone_temperature(self) -> float:
+        """Highest room setpoint, in °C."""
         value = self.raw.get("insideTemperatureMax")
         return value / 2 if value else MAX_ZONE_TEMP
 
     @property
     def boiler_serial(self) -> str | None:
+        """The boiler controller's serial number, if reported."""
         return self.raw.get("boilerControllerSerialNumber") or None
 
     @property
     def wifi_sw_version(self) -> str | None:
+        """The Wi-Fi module's software version, if reported."""
         version = self.raw.get("wifiSwVersion")
         return str(version) if version is not None else None

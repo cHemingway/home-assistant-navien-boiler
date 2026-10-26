@@ -17,6 +17,7 @@ class NavienApiError(NavienError):
     """The cloud returned an error response."""
 
     def __init__(self, message: str, code: int | None = None) -> None:
+        """Keep the cloud's error code, when there is one."""
         super().__init__(message)
         self.code = code
 

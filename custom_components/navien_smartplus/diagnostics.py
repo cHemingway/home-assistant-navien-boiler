@@ -1,7 +1,5 @@
 """Diagnostics for Navien Smart Plus."""
 
-from __future__ import annotations
-
 from dataclasses import asdict
 from typing import Any
 
@@ -24,7 +22,10 @@ TO_REDACT = {
 }
 
 
-async def async_get_config_entry_diagnostics(hass: HomeAssistant, entry: NavienConfigEntry) -> dict[str, Any]:
+async def async_get_config_entry_diagnostics(
+    hass: HomeAssistant, entry: NavienConfigEntry
+) -> dict[str, Any]:
+    """Return the entry's data and each module's raw replies, with personal details redacted."""
     runtime = entry.runtime_data
     devices = []
     for device_id, coordinator in runtime.coordinators.items():
@@ -35,11 +36,17 @@ async def async_get_config_entry_diagnostics(hass: HomeAssistant, entry: NavienC
                 "device": asdict(coordinator.device),
                 "features": data.features.raw if data else None,
                 "status": data.status.raw if data else None,
-                "schedules": {k: asdict(v) for k, v in data.schedules.items()} if data else None,
+                "schedules": {k: asdict(v) for k, v in data.schedules.items()}
+                if data
+                else None,
                 "usage_totals": asdict(usage) if usage else None,
             }
         )
     return async_redact_data(
-        {"entry": dict(entry.data), "mqtt_connected": runtime.client.connected, "devices": devices},
+        {
+            "entry": dict(entry.data),
+            "mqtt_connected": runtime.client.connected,
+            "devices": devices,
+        },
         TO_REDACT,
     )

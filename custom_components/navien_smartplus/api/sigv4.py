@@ -1,7 +1,5 @@
 """SigV4-presigned WebSocket path for AWS IoT Core MQTT (what the AWS IoT Android SDK does)."""
 
-from __future__ import annotations
-
 from datetime import UTC, datetime
 import hashlib
 import hmac
@@ -39,10 +37,22 @@ def presign_mqtt_path(
     }
     query = "&".join(f"{_q(k)}={_q(v)}" for k, v in sorted(params.items()))
     canonical_request = "\n".join(
-        ["GET", "/mqtt", query, f"host:{host}\n", "host", hashlib.sha256(b"").hexdigest()]
+        [
+            "GET",
+            "/mqtt",
+            query,
+            f"host:{host}\n",
+            "host",
+            hashlib.sha256(b"").hexdigest(),
+        ]
     )
     string_to_sign = "\n".join(
-        ["AWS4-HMAC-SHA256", amz_date, scope, hashlib.sha256(canonical_request.encode()).hexdigest()]
+        [
+            "AWS4-HMAC-SHA256",
+            amz_date,
+            scope,
+            hashlib.sha256(canonical_request.encode()).hexdigest(),
+        ]
     )
 
     key = _hmac(f"AWS4{secret_key}".encode(), date_stamp)
