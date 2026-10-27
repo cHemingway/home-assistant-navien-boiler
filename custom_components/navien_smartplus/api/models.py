@@ -177,13 +177,13 @@ class ZoneStatus:
     def target_temperature(
         self, schedule: HeatingSchedule | None, now: datetime
     ) -> float:
-        """The target the app shows.
-
-        In holiday mode it's the frost-protection temperature, in AUTO the schedule's current slot, and
-        otherwise the setting.
-        """
+        """The target the app shows: the frost-protection temperature in holiday mode, otherwise the setpoint."""
         if self.holiday:
             return self.frost_temperature
+        return self.setpoint(schedule, now)
+
+    def setpoint(self, schedule: HeatingSchedule | None, now: datetime) -> float:
+        """The zone's own setpoint, ignoring holiday mode: the schedule's current slot in AUTO, otherwise the setting."""
         if self.mode == HeatingMode.AUTO and schedule is not None:
             scheduled = schedule.scheduled_temperature(
                 self.program_type, self.program_number, now

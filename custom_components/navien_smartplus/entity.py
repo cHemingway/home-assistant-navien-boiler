@@ -9,14 +9,16 @@ from homeassistant.helpers.device_registry import (
     CONNECTION_NETWORK_MAC,
     DeviceInfo,
 )
-from homeassistant.helpers.update_coordinator import (
-    CoordinatorEntity,
-    DataUpdateCoordinator,
-)
+from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .api import Device, DeviceStatus, NavienError, ZoneStatus
 from .const import DOMAIN, MANUFACTURER
-from .coordinator import NavienCoordinator, NavienData, NavienUsageCoordinator
+from .coordinator import (
+    NavienBaseCoordinator,
+    NavienCoordinator,
+    NavienData,
+    NavienUsageCoordinator,
+)
 
 
 def device_info(device: Device, data: NavienData | None = None) -> DeviceInfo:
@@ -37,12 +39,19 @@ def device_info(device: Device, data: NavienData | None = None) -> DeviceInfo:
     return info
 
 
-class NavienBaseEntity[CoordinatorT: DataUpdateCoordinator[Any]](
+class NavienBaseEntity[CoordinatorT: NavienBaseCoordinator[Any]](
     CoordinatorEntity[CoordinatorT]
 ):
-    """Sets its `_attr_` state from the coordinator data when added and on every update."""
+    """An entity of one module. Sets its `_attr_` state from the coordinator data when added and on every update."""
 
     _attr_has_entity_name = True
+
+    def __init__(self, coordinator: CoordinatorT, key: str) -> None:
+        """Set up an entity of the coordinator's module, unique by `key`."""
+        super().__init__(coordinator)
+        self.device = coordinator.device
+        self._attr_unique_id = f"{self.device.device_id}_{key}"
+        self._attr_device_info = device_info(self.device)
 
     async def async_added_to_hass(self) -> None:
         """Set the initial state before the entity is first written."""
@@ -63,10 +72,8 @@ class NavienEntity(NavienBaseEntity[NavienCoordinator]):
     """An entity of one BCM module, kept up to date by its coordinator."""
 
     def __init__(self, coordinator: NavienCoordinator, key: str) -> None:
-        """Set up an entity of one module, unique by `key`."""
-        super().__init__(coordinator)
-        self.device = coordinator.device
-        self._attr_unique_id = f"{self.device.device_id}_{key}"
+        """Set up an entity of one module, unique by `key`, with its serial number and version."""
+        super().__init__(coordinator, key)
         self._attr_device_info = device_info(self.device, coordinator.data)
 
     @property
@@ -106,12 +113,6 @@ class NavienZoneEntity(NavienEntity):
 
 class NavienUsageEntity(NavienBaseEntity[NavienUsageCoordinator]):
     """An entity fed by the hourly usage coordinator."""
-
-    def __init__(self, coordinator: NavienUsageCoordinator, key: str) -> None:
-        """Set up an entity of one module's usage, unique by `key`."""
-        super().__init__(coordinator)
-        self._attr_unique_id = f"{coordinator.device.device_id}_{key}"
-        self._attr_device_info = device_info(coordinator.device)
 
     @property
     def available(self) -> bool:

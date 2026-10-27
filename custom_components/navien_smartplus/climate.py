@@ -104,53 +104,60 @@ class NavienZoneClimate(NavienZoneEntity, ClimateEntity):
             HVACAction.HEATING if zone.heating_active else HVACAction.IDLE
         )
 
-    def _target_or_current(self) -> float:
-        """Setpoint to send with a mode change (the mode command always carries one).
+    def _setpoint(self) -> float:
+        """Setpoint to send with a mode change (the mode command always carries one), within the zone's limits."""
+        if (zone := self.zone) is None:
+            return 20.0
+        schedule = self.coordinator.data.schedules.get(self.zone_id)
+        return min(
+            max(zone.setpoint(schedule, dt_util.now()), self.min_temp), self.max_temp
+        )
 
-        The target shown, except in holiday mode, where that's the frost-protection temperature rather than the
-        zone's own setting.
-        """
-        zone = self.zone
-        if zone is None:
-            setpoint = 20.0
-        elif zone.holiday or self.target_temperature is None:
-            setpoint = zone.setting_temperature
-        else:
-            setpoint = self.target_temperature
-        return min(max(setpoint, self.min_temp), self.max_temp)
+    def _zone_off_error(self) -> ServiceValidationError:
+        return ServiceValidationError(
+            translation_domain=DOMAIN,
+            translation_key="zone_off",
+            translation_placeholders={"zone": self._zone_name},
+        )
 
     async def async_set_temperature(self, **kwargs: Any) -> None:
         """Change the setpoint, and the mode if one is given."""
-        mode = self._mode
+        temperature = kwargs.get(ATTR_TEMPERATURE)
         if (
             hvac_mode := kwargs.get(ATTR_HVAC_MODE)
         ) is not None and hvac_mode != self.hvac_mode:
-            await self.async_set_hvac_mode(hvac_mode)
-            # The reply may not include a status, so go by the mode just set.
+            if temperature is None or hvac_mode == HVACMode.OFF:
+                await self.async_set_hvac_mode(hvac_mode)
+                if temperature is not None:
+                    raise self._zone_off_error()
+                return
+            # The mode command carries the setpoint, so one command does both; in Auto that's an Override.
             mode = (
-                self._mode
-                if self.hvac_mode == hvac_mode
+                HeatingMode.OVERRIDE
+                if hvac_mode == HVACMode.AUTO
                 else NAVIEN_FROM_HVAC_MODE[hvac_mode]
             )
-        if (temperature := kwargs.get(ATTR_TEMPERATURE)) is None:
-            return
-        if mode == HeatingMode.OFF:
-            raise ServiceValidationError(
-                translation_domain=DOMAIN,
-                translation_key="zone_off",
-                translation_placeholders={"zone": self._zone_name},
+            await self._control(
+                self.coordinator.client.async_set_zone_mode(
+                    self.device, self.zone_id, mode, temperature
+                )
             )
+            return
+        if temperature is None:
+            return
+        if self._mode == HeatingMode.OFF:
+            raise self._zone_off_error()
         # In Auto this starts an Override until the next program slot, as on the thermostat.
         await self._control(
             self.coordinator.client.async_set_zone_temperature(
-                self.device, self.zone_id, temperature, mode
+                self.device, self.zone_id, temperature, self._mode
             )
         )
 
     async def _set_mode(self, mode: HeatingMode) -> None:
         await self._control(
             self.coordinator.client.async_set_zone_mode(
-                self.device, self.zone_id, mode, self._target_or_current()
+                self.device, self.zone_id, mode, self._setpoint()
             )
         )
 

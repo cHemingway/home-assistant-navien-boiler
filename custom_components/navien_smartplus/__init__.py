@@ -86,7 +86,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: NavienConfigEntry) -> bo
     for coordinator in coordinators.values():
         await coordinator.async_config_entry_first_refresh()
     usage = {
-        device_id: NavienUsageCoordinator(hass, entry, client, coordinator.device)
+        device_id: NavienUsageCoordinator(hass, coordinator)
         for device_id, coordinator in coordinators.items()
         if coordinator.data.features.has_fuel_usage
     }

@@ -56,21 +56,23 @@ class NavienBaseCoordinator[T](DataUpdateCoordinator[T]):
     """Retries a failed update sooner than the poll interval, backing off towards it."""
 
     config_entry: NavienConfigEntry
+    device: Device
     _failures = 0
 
     async def _async_update_data(self) -> T:
         try:
-            data = await self._async_fetch()
+            return await self._async_fetch()
         except UpdateFailed as err:
-            self._failures += 1
-            if self._retry_soon() and self.update_interval is not None:
+            # Failures in a row; a pushed update in between also counts as a success.
+            self._failures = self._failures + 1 if not self.last_update_success else 1
+            if self._retry_soon():
+                if TYPE_CHECKING:
+                    assert self.update_interval is not None
                 err.retry_after = min(
                     RETRY_AFTER * 2 ** (self._failures - 1),
                     self.update_interval.total_seconds(),
                 )
             raise
-        self._failures = 0
-        return data
 
     async def _async_fetch(self) -> T:
         """Fetch the data; errors from `_cloud` mark the update as failed."""
@@ -175,34 +177,33 @@ class NavienUsageCoordinator(NavienBaseCoordinator[UsageRecord]):
     longer matches the cached days, which happens once a day when the module fills in the day that just ended.
     """
 
-    def __init__(
-        self,
-        hass: HomeAssistant,
-        entry: NavienConfigEntry,
-        client: NavienSmartPlusClient,
-        device: Device,
-    ) -> None:
-        """Set up usage polling for one module."""
+    def __init__(self, hass: HomeAssistant, status: NavienCoordinator) -> None:
+        """Set up usage polling for the module that `status` polls."""
+        device = status.device
         super().__init__(
             hass,
             LOGGER,
-            config_entry=entry,
+            config_entry=status.config_entry,
             name=f"{DOMAIN} usage {device.device_id}",
             update_interval=USAGE_INTERVAL,
         )
-        self.client = client
+        self._status = status
+        self.client = status.client
         self.device = device
         # Every finished day since the backfill started, kept on disk so statistics sums always start from the
         # same day.
         self._store = usage_store(hass, device.device_id)
         self._days: dict[date, UsageRecord] | None = None
+        # Months the first backfill still has to fetch, and the earliest day changed since the cache was last
+        # saved. Both survive a failed update, so the next one carries on where it stopped.
+        self._backfill: list[tuple[int, int]] = []
+        self._unsaved_since: date | None = None
         # The day last December was last checked, while January's first days have no total to compare it with.
         self._last_year_checked: date | None = None
 
     async def _async_fetch(self) -> UsageRecord:
         """Fetch this year's totals, and new daily history when the totals have moved on."""
         today = dt_util.now().date()
-        changed_since: date | None = None
         if self._days is None:
             stored = await self._store.async_load() or {}
             self._days = {
@@ -210,36 +211,40 @@ class NavienUsageCoordinator(NavienBaseCoordinator[UsageRecord]):
                 for k, v in stored.get("days", {}).items()
             }
             if not self._days:
-                try:
-                    changed_since = await self._fetch_days(
-                        _months_back(today, USAGE_BACKFILL_MONTHS), today
-                    )
-                except UpdateFailed, ConfigEntryAuthFailed:
-                    # Start the backfill again next time rather than keep a cache with months missing.
-                    self._days = None
-                    raise
+                self._backfill = _months_back(today, USAGE_BACKFILL_MONTHS)
+                # The backfill includes last December.
+                self._last_year_checked = today
+        while self._backfill:
+            await self._fetch_month(*self._backfill[0], today)
+            self._backfill.pop(0)
         monthly = await _cloud(
             self.client.async_get_monthly_usage(self.device, today.year)
         )
-        # Check last month too for the first few days, while its final days are still being filled in.
+        # Check last month too for the first few days, while its final days are still being filled in. This
+        # year's totals don't cover last December, so in January its days are fetched once a day instead of
+        # hourly; if that's before the module fills in 31 December, the day arrives a day late.
         for year, month in _months_back(today, 2 if today.day <= 3 else 1):
-            if year == today.year:
-                if self._cached_month_matches(year, month, monthly):
-                    continue
-            elif self._last_year_checked == today:
-                # This year's totals don't cover last December, so fetch its days once a day instead of hourly.
+            last_year = year != today.year
+            if self._cached_month_matches(year, month, monthly) or (
+                last_year and self._last_year_checked == today
+            ):
                 continue
-            if (since := await self._fetch_days([(year, month)], today)) is not None:
-                changed_since = min(changed_since or since, since)
-            if year != today.year:
+            await self._fetch_month(year, month, today)
+            if last_year:
                 self._last_year_checked = today
 
-        if changed_since is not None:
+        # Saved and imported only once everything has been fetched, so a failure part-way writes nothing.
+        if self._unsaved_since is not None:
             await self._store.async_save(
                 {"days": {d.isoformat(): asdict(r) for d, r in self._days.items()}}
             )
-            self._import_statistics(changed_since)
+            self._import_statistics(self._unsaved_since)
+            self._unsaved_since = None
         return UsageRecord.year_total(today.year, monthly)
+
+    def _retry_soon(self) -> bool:
+        """Not while the module has reported itself offline."""
+        return self._status.module_online is not False
 
     def _cached_month_matches(
         self, year: int, month: int, monthly: list[UsageRecord]
@@ -259,25 +264,20 @@ class NavienUsageCoordinator(NavienBaseCoordinator[UsageRecord]):
             total.hot_water_usage,
         )
 
-    async def _fetch_days(
-        self, months: list[tuple[int, int]], today: date
-    ) -> date | None:
-        """Fetch the finished days of the given months into the cache. Returns the earliest day that changed."""
+    async def _fetch_month(self, year: int, month: int, today: date) -> None:
+        """Fetch a month's finished days into the cache, noting the earliest day that changed."""
         if TYPE_CHECKING:
             assert self._days is not None
-        earliest: date | None = None
-        for year, month in months:
-            for record in await _cloud(
-                self.client.async_get_daily_usage(self.device, year, month)
-            ):
-                day = record.date
-                if day >= today:
-                    # Unfinished days read 0 until they are over.
-                    continue
-                if self._days.get(day) != record:
-                    self._days[day] = record
-                    earliest = min(earliest or day, day)
-        return earliest
+        for record in await _cloud(
+            self.client.async_get_daily_usage(self.device, year, month)
+        ):
+            day = record.date
+            if day >= today:
+                # Unfinished days read 0 until they are over.
+                continue
+            if self._days.get(day) != record:
+                self._days[day] = record
+                self._unsaved_since = min(self._unsaved_since or day, day)
 
     def _import_statistics(self, since: date) -> None:
         """Write one statistic row per finished day from `since`, at local midnight, with sums from the first day."""

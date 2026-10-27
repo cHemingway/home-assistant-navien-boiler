@@ -241,10 +241,9 @@ async def test_bad_message_keeps_the_connection(
     statuses: list[DeviceStatus] = []
 
     def listener(device: Any, status: DeviceStatus) -> None:
-        if not statuses:
-            statuses.append(status)
-            raise ValueError("listener bug")
         statuses.append(status)
+        if len(statuses) == 1:
+            raise ValueError("listener bug")
 
     client.add_status_listener(listener)
     await client.async_connect()

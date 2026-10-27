@@ -47,7 +47,7 @@ from custom_components.navien_smartplus.api import (
 )
 from custom_components.navien_smartplus.const import DOMAIN
 
-from .conftest import fixture_status
+from .conftest import fixture_daily_usage, fixture_status
 
 CLIMATE = "climate.navien_boiler_home"
 
@@ -228,13 +228,9 @@ async def test_hot_water_service(
     )
 
 
-async def test_gas_statistics_imported(
-    hass: HomeAssistant, mock_client: MagicMock, config_entry: MockConfigEntry
-) -> None:
-    """Daily gas use is imported as statistics at local midnight."""
-    await setup_entry(hass, config_entry)
+async def total_gas_rows(hass: HomeAssistant) -> list[dict]:
+    """The imported daily total-gas statistics from October 2026."""
     await async_wait_recording_done(hass)
-
     statistic_id = "navien_smartplus:001122334455_total_gas"
     stats = await hass.async_add_executor_job(
         statistics_during_period,
@@ -246,7 +242,15 @@ async def test_gas_statistics_imported(
         None,
         {"state", "sum"},
     )
-    rows = stats[statistic_id]
+    return stats.get(statistic_id, [])
+
+
+async def test_gas_statistics_imported(
+    hass: HomeAssistant, mock_client: MagicMock, config_entry: MockConfigEntry
+) -> None:
+    """Daily gas use is imported as statistics at local midnight."""
+    await setup_entry(hass, config_entry)
+    rows = await total_gas_rows(hass)
     # One row per finished day (1-24 October), at local midnight; the running sum ends at the month's total.
     assert len(rows) == 24
     assert rows[-1]["sum"] == 27  # 10 m³ heating + 17 m³ hot water
@@ -487,46 +491,33 @@ async def test_hot_water_disabled_by_default(
     )
 
 
-async def total_gas_rows(hass: HomeAssistant) -> list[dict]:
-    """The imported daily total-gas statistics from October 2026."""
-    await async_wait_recording_done(hass)
-    statistic_id = "navien_smartplus:001122334455_total_gas"
-    stats = await hass.async_add_executor_job(
-        statistics_during_period,
-        hass,
-        datetime.fromisoformat("2026-10-01T00:00:00+01:00"),
-        None,
-        {statistic_id},
-        "hour",
-        None,
-        {"state", "sum"},
-    )
-    return stats.get(statistic_id, [])
-
-
 async def test_backfill_failing_part_way_starts_again(
     hass: HomeAssistant,
     mock_client: MagicMock,
     config_entry: MockConfigEntry,
     freezer: FrozenDateTimeFactory,
 ) -> None:
-    """A history backfill that fails part-way is retried in full a minute later, leaving no gap."""
-    daily = mock_client.async_get_daily_usage.side_effect
-    failed: list[tuple[int, int]] = []
+    """A history backfill that fails part-way carries on from that month a minute later, leaving no gap."""
+    daily = mock_client.async_get_daily_usage
+
+    def june_requests() -> int:
+        return sum(1 for c in daily.await_args_list if c.args[1:] == (2026, 6))
 
     def fail_june_once(device: Any, year: int, month: int) -> list:
-        if (year, month) == (2026, 6) and not failed:
-            failed.append((year, month))
+        if (year, month) == (2026, 6) and june_requests() == 1:
             raise NavienConnectionError("no reply")
-        return daily(device, year, month)
+        return fixture_daily_usage(year, month)
 
-    mock_client.async_get_daily_usage.side_effect = fail_june_once
+    daily.side_effect = fail_june_once
     await setup_entry(hass, config_entry)
-    assert failed
+    assert june_requests() == 1
     assert await total_gas_rows(hass) == []
+    requests = daily.await_count
     assert hass.states.get("sensor.navien_boiler_gas_this_year").state == "unavailable"
 
     await wait(hass, freezer, timedelta(minutes=1, seconds=1))
+    # It carried on from June: June to October, not all 13 months again.
+    assert daily.await_count - requests == 5
     rows = await total_gas_rows(hass)
     assert len(rows) == 24
     assert rows[-1]["sum"] == 27
@@ -547,15 +538,15 @@ async def test_last_december_checked_once_a_day_in_january(
     def december_requests() -> int:
         return sum(1 for c in daily.await_args_list if c.args[1:] == (2026, 12))
 
-    # The backfill, and the first check of last December.
-    assert december_requests() == 2
+    # The backfill covers last December for today.
+    assert december_requests() == 1
     await wait(hass, freezer, timedelta(hours=1, seconds=1))
     await wait(hass, freezer, timedelta(hours=1, seconds=1))
-    assert december_requests() == 2
+    assert december_requests() == 1
 
     freezer.move_to("2027-01-02 10:00:00+00:00")
     await wait(hass, freezer, timedelta(hours=1, seconds=1))
-    assert december_requests() == 3
+    assert december_requests() == 2
 
 
 async def test_mode_change_in_holiday_keeps_the_zone_setting(
@@ -583,7 +574,7 @@ async def test_mode_change_in_holiday_keeps_the_zone_setting(
 async def test_set_temperature_with_mode_from_off(
     hass: HomeAssistant, mock_client: MagicMock, config_entry: MockConfigEntry
 ) -> None:
-    """A temperature sent with a mode change uses the new mode, even when the reply carries no status."""
+    """A temperature sent with a mode change goes out as one mode command carrying the new setpoint."""
     status = fixture_status()
     status.zones[1].mode = HeatingMode.OFF
     mock_client.async_get_status.return_value = status
@@ -595,10 +586,7 @@ async def test_set_temperature_with_mode_from_off(
         {ATTR_ENTITY_ID: CLIMATE, ATTR_HVAC_MODE: HVACMode.HEAT, ATTR_TEMPERATURE: 21},
         blocking=True,
     )
-    device = mock_client.devices[0]
     mock_client.async_set_zone_mode.assert_awaited_once_with(
-        device, 1, HeatingMode.ON, 19.0
+        mock_client.devices[0], 1, HeatingMode.ON, 21
     )
-    mock_client.async_set_zone_temperature.assert_awaited_once_with(
-        device, 1, 21, HeatingMode.ON
-    )
+    mock_client.async_set_zone_temperature.assert_not_awaited()
