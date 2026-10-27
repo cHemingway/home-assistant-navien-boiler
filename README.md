@@ -39,7 +39,7 @@ One device per Smart Plus module, with:
 Updates are pushed: the boiler's module reports every change within seconds, whether it's made in Home
 Assistant, the Smart Plus app or on the thermostat, including each 0.5 °C change in room temperature. Status is
 also polled every 10 minutes as a safety net. If the connection to Navien's cloud drops, the integration
-reconnects straight away.
+reconnects straight away, and if it can't reach the cloud it tries again every minute until it can.
 
 ### Energy dashboard
 

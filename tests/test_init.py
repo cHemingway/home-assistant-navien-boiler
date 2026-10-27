@@ -1,6 +1,6 @@
 """Setup, entities and services of the Navien Smart Plus integration (client mocked with real captured data)."""
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from unittest.mock import MagicMock
 
 from freezegun.api import FrozenDateTimeFactory
@@ -30,7 +30,10 @@ from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import entity_registry as er
 from homeassistant.util import dt as dt_util
 import pytest
-from pytest_homeassistant_custom_component.common import MockConfigEntry
+from pytest_homeassistant_custom_component.common import (
+    MockConfigEntry,
+    async_fire_time_changed,
+)
 from pytest_homeassistant_custom_component.components.recorder.common import (
     async_wait_recording_done,
 )
@@ -366,6 +369,40 @@ async def test_online_and_thermostat_connection(
     await coordinator.async_refresh()
     await hass.async_block_till_done()
     assert hass.states.get(online).state == "on"
+
+
+async def test_failed_poll_retries_after_a_minute(
+    hass: HomeAssistant,
+    mock_client: MagicMock,
+    config_entry: MockConfigEntry,
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    """A failed poll is retried a minute later, and polling goes back to every 10 minutes once it works."""
+    await setup_entry(hass, config_entry)
+    status = mock_client.async_get_status
+
+    async def wait(delta: timedelta) -> None:
+        freezer.tick(delta)
+        async_fire_time_changed(hass)
+        await hass.async_block_till_done()
+
+    # A DNS blip: the 10-minute poll fails.
+    status.side_effect = NavienConnectionError("Timeout while contacting DNS servers")
+    await wait(timedelta(minutes=10))
+    assert hass.states.get(CLIMATE).state == "unavailable"
+
+    # Retried a minute later, by when it's back.
+    status.side_effect = None
+    polls = status.await_count
+    await wait(timedelta(minutes=1, seconds=1))
+    assert status.await_count == polls + 1
+    assert hass.states.get(CLIMATE).state == "auto"
+
+    # Then back to the normal interval.
+    await wait(timedelta(minutes=1, seconds=1))
+    assert status.await_count == polls + 1
+    await wait(timedelta(minutes=9))
+    assert status.await_count == polls + 2
 
 
 def test_error_states_have_descriptions() -> None:

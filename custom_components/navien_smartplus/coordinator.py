@@ -34,6 +34,7 @@ from .const import (
     LOGGER,
     SCHEDULE_INTERVAL,
     STATUS_INTERVAL,
+    STATUS_RETRY_AFTER,
     USAGE_BACKFILL_MONTHS,
     USAGE_INTERVAL,
 )
@@ -83,14 +84,20 @@ class NavienCoordinator(DataUpdateCoordinator[NavienData]):
         if previous:
             features = previous.features
         else:
-            features = await _cloud(self.client.async_get_features(self.device))
-        status = await _cloud(self.client.async_get_status(self.device))
+            features = await _cloud(
+                self.client.async_get_features(self.device),
+                retry_after=STATUS_RETRY_AFTER,
+            )
+        status = await _cloud(
+            self.client.async_get_status(self.device), retry_after=STATUS_RETRY_AFTER
+        )
         # It just answered, so it's online even if a connection event was missed.
         self.module_online = True
         schedules = previous.schedules if previous else {}
         if self._schedule_due(status):
             schedules = await _cloud(
-                self.client.async_get_heating_schedules(self.device)
+                self.client.async_get_heating_schedules(self.device),
+                retry_after=STATUS_RETRY_AFTER,
             )
             self._schedules_at = dt_util.utcnow()
         return NavienData(status=status, features=features, schedules=schedules)
@@ -267,14 +274,17 @@ class NavienUsageCoordinator(DataUpdateCoordinator[UsageRecord]):
         LOGGER.debug("Imported %s days of gas statistics from %s", len(starts), since)
 
 
-async def _cloud[T](request: Awaitable[T]) -> T:
-    """Run one cloud request, turning its errors into coordinator errors."""
+async def _cloud[T](request: Awaitable[T], *, retry_after: float | None = None) -> T:
+    """Run one cloud request, turning its errors into coordinator errors.
+
+    `retry_after` (seconds) brings the coordinator's next try forward after a failure.
+    """
     try:
         return await request
     except NavienAuthError as err:
         raise ConfigEntryAuthFailed(str(err)) from err
     except NavienError as err:
-        raise UpdateFailed(str(err)) from err
+        raise UpdateFailed(str(err), retry_after=retry_after) from err
 
 
 def _months_back(today: date, count: int) -> list[tuple[int, int]]:
