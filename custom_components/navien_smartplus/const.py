@@ -12,9 +12,9 @@ MANUFACTURER = "Navien"
 
 # The module pushes every change, so polling is only a safety net for a missed push or a stalled connection.
 STATUS_INTERVAL = timedelta(minutes=10)
-# Seconds until the next try after a failed status update, so a short outage (a network or DNS blip) doesn't
-# leave the entities unavailable for a whole poll interval.
-STATUS_RETRY_AFTER = 60
+# Seconds until the first retry after a failed update, so a short outage (a network or DNS blip) doesn't leave
+# the entities unavailable for a whole poll interval. Each further failure doubles it, up to the poll interval.
+RETRY_AFTER = 60
 SCHEDULE_INTERVAL = timedelta(minutes=30)
 USAGE_INTERVAL = timedelta(hours=1)
 

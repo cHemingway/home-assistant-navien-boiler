@@ -1,6 +1,7 @@
 """Setup, entities and services of the Navien Smart Plus integration (client mocked with real captured data)."""
 
 from datetime import datetime, timedelta
+from typing import Any
 from unittest.mock import MagicMock
 
 from freezegun.api import FrozenDateTimeFactory
@@ -371,38 +372,67 @@ async def test_online_and_thermostat_connection(
     assert hass.states.get(online).state == "on"
 
 
-async def test_failed_poll_retries_after_a_minute(
+async def wait(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory, delta: timedelta
+) -> None:
+    """Let `delta` pass and run whatever Home Assistant scheduled in that time."""
+    freezer.tick(delta)
+    async_fire_time_changed(hass)
+    await hass.async_block_till_done()
+
+
+async def test_failed_poll_retries_sooner_with_backoff(
     hass: HomeAssistant,
     mock_client: MagicMock,
     config_entry: MockConfigEntry,
     freezer: FrozenDateTimeFactory,
 ) -> None:
-    """A failed poll is retried a minute later, and polling goes back to every 10 minutes once it works."""
+    """A failed poll is retried after a minute, then two, and polling goes back to every 10 minutes once it works."""
     await setup_entry(hass, config_entry)
     status = mock_client.async_get_status
 
-    async def wait(delta: timedelta) -> None:
-        freezer.tick(delta)
-        async_fire_time_changed(hass)
-        await hass.async_block_till_done()
-
-    # A DNS blip: the 10-minute poll fails.
+    # A DNS blip: the 10-minute poll fails, and so does the first retry a minute later.
     status.side_effect = NavienConnectionError("Timeout while contacting DNS servers")
-    await wait(timedelta(minutes=10))
+    await wait(hass, freezer, timedelta(minutes=10))
     assert hass.states.get(CLIMATE).state == "unavailable"
-
-    # Retried a minute later, by when it's back.
-    status.side_effect = None
     polls = status.await_count
-    await wait(timedelta(minutes=1, seconds=1))
+    await wait(hass, freezer, timedelta(minutes=1, seconds=1))
     assert status.await_count == polls + 1
+
+    # The next retry waits twice as long, by when it's back.
+    status.side_effect = None
+    await wait(hass, freezer, timedelta(minutes=1, seconds=1))
+    assert status.await_count == polls + 1
+    await wait(hass, freezer, timedelta(minutes=1))
+    assert status.await_count == polls + 2
     assert hass.states.get(CLIMATE).state == "auto"
 
     # Then back to the normal interval.
-    await wait(timedelta(minutes=1, seconds=1))
-    assert status.await_count == polls + 1
-    await wait(timedelta(minutes=9))
+    await wait(hass, freezer, timedelta(minutes=2))
     assert status.await_count == polls + 2
+    await wait(hass, freezer, timedelta(minutes=8, seconds=1))
+    assert status.await_count == polls + 3
+
+
+async def test_no_quick_retry_while_module_offline(
+    hass: HomeAssistant,
+    mock_client: MagicMock,
+    config_entry: MockConfigEntry,
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    """Once the module reports it's offline, failed polls wait for the normal interval."""
+    await setup_entry(hass, config_entry)
+    on_online = mock_client.add_online_listener.call_args.args[0]
+    on_online(mock_client.devices[0], False)
+    status = mock_client.async_get_status
+    status.side_effect = NavienConnectionError("no reply")
+
+    await wait(hass, freezer, timedelta(minutes=10))
+    polls = status.await_count
+    await wait(hass, freezer, timedelta(minutes=5))
+    assert status.await_count == polls
+    await wait(hass, freezer, timedelta(minutes=5, seconds=1))
+    assert status.await_count == polls + 1
 
 
 def test_error_states_have_descriptions() -> None:
@@ -454,4 +484,121 @@ async def test_hot_water_disabled_by_default(
     assert hass.states.get("water_heater.navien_boiler_hot_water") is None
     assert (
         hass.states.get("binary_sensor.navien_boiler_hot_water_running").state == "off"
+    )
+
+
+async def total_gas_rows(hass: HomeAssistant) -> list[dict]:
+    """The imported daily total-gas statistics from October 2026."""
+    await async_wait_recording_done(hass)
+    statistic_id = "navien_smartplus:001122334455_total_gas"
+    stats = await hass.async_add_executor_job(
+        statistics_during_period,
+        hass,
+        datetime.fromisoformat("2026-10-01T00:00:00+01:00"),
+        None,
+        {statistic_id},
+        "hour",
+        None,
+        {"state", "sum"},
+    )
+    return stats.get(statistic_id, [])
+
+
+async def test_backfill_failing_part_way_starts_again(
+    hass: HomeAssistant,
+    mock_client: MagicMock,
+    config_entry: MockConfigEntry,
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    """A history backfill that fails part-way is retried in full a minute later, leaving no gap."""
+    daily = mock_client.async_get_daily_usage.side_effect
+    failed: list[tuple[int, int]] = []
+
+    def fail_june_once(device: Any, year: int, month: int) -> list:
+        if (year, month) == (2026, 6) and not failed:
+            failed.append((year, month))
+            raise NavienConnectionError("no reply")
+        return daily(device, year, month)
+
+    mock_client.async_get_daily_usage.side_effect = fail_june_once
+    await setup_entry(hass, config_entry)
+    assert failed
+    assert await total_gas_rows(hass) == []
+    assert hass.states.get("sensor.navien_boiler_gas_this_year").state == "unavailable"
+
+    await wait(hass, freezer, timedelta(minutes=1, seconds=1))
+    rows = await total_gas_rows(hass)
+    assert len(rows) == 24
+    assert rows[-1]["sum"] == 27
+    assert hass.states.get("sensor.navien_boiler_gas_this_year").state != "unavailable"
+
+
+async def test_last_december_checked_once_a_day_in_january(
+    hass: HomeAssistant,
+    mock_client: MagicMock,
+    config_entry: MockConfigEntry,
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    """In January's first days, last December's days are fetched once a day, not on every hourly update."""
+    freezer.move_to("2027-01-01 10:00:00+00:00")
+    await setup_entry(hass, config_entry)
+    daily = mock_client.async_get_daily_usage
+
+    def december_requests() -> int:
+        return sum(1 for c in daily.await_args_list if c.args[1:] == (2026, 12))
+
+    # The backfill, and the first check of last December.
+    assert december_requests() == 2
+    await wait(hass, freezer, timedelta(hours=1, seconds=1))
+    await wait(hass, freezer, timedelta(hours=1, seconds=1))
+    assert december_requests() == 2
+
+    freezer.move_to("2027-01-02 10:00:00+00:00")
+    await wait(hass, freezer, timedelta(hours=1, seconds=1))
+    assert december_requests() == 3
+
+
+async def test_mode_change_in_holiday_keeps_the_zone_setting(
+    hass: HomeAssistant, mock_client: MagicMock, config_entry: MockConfigEntry
+) -> None:
+    """Holiday mode shows the frost-protection target, but a mode change sends the zone's own setting."""
+    status = fixture_status()
+    status.zones[1].holiday = True
+    status.zones[1].frost_temperature = 4.0
+    mock_client.async_get_status.return_value = status
+    await setup_entry(hass, config_entry)
+    assert hass.states.get(CLIMATE).attributes["temperature"] == 4.0
+
+    await hass.services.async_call(
+        CLIMATE_DOMAIN,
+        SERVICE_SET_HVAC_MODE,
+        {ATTR_ENTITY_ID: CLIMATE, ATTR_HVAC_MODE: HVACMode.HEAT},
+        blocking=True,
+    )
+    mock_client.async_set_zone_mode.assert_awaited_once_with(
+        mock_client.devices[0], 1, HeatingMode.ON, 19.0
+    )
+
+
+async def test_set_temperature_with_mode_from_off(
+    hass: HomeAssistant, mock_client: MagicMock, config_entry: MockConfigEntry
+) -> None:
+    """A temperature sent with a mode change uses the new mode, even when the reply carries no status."""
+    status = fixture_status()
+    status.zones[1].mode = HeatingMode.OFF
+    mock_client.async_get_status.return_value = status
+    await setup_entry(hass, config_entry)
+
+    await hass.services.async_call(
+        CLIMATE_DOMAIN,
+        SERVICE_SET_TEMPERATURE,
+        {ATTR_ENTITY_ID: CLIMATE, ATTR_HVAC_MODE: HVACMode.HEAT, ATTR_TEMPERATURE: 21},
+        blocking=True,
+    )
+    device = mock_client.devices[0]
+    mock_client.async_set_zone_mode.assert_awaited_once_with(
+        device, 1, HeatingMode.ON, 19.0
+    )
+    mock_client.async_set_zone_temperature.assert_awaited_once_with(
+        device, 1, 21, HeatingMode.ON
     )

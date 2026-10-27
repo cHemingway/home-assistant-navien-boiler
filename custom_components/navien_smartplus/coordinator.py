@@ -32,9 +32,9 @@ from .api import (
 from .const import (
     DOMAIN,
     LOGGER,
+    RETRY_AFTER,
     SCHEDULE_INTERVAL,
     STATUS_INTERVAL,
-    STATUS_RETRY_AFTER,
     USAGE_BACKFILL_MONTHS,
     USAGE_INTERVAL,
 )
@@ -52,10 +52,37 @@ class NavienData:
     schedules: dict[int, HeatingSchedule]
 
 
-class NavienCoordinator(DataUpdateCoordinator[NavienData]):
-    """Polls status for one BCM module and applies pushed updates."""
+class NavienBaseCoordinator[T](DataUpdateCoordinator[T]):
+    """Retries a failed update sooner than the poll interval, backing off towards it."""
 
     config_entry: NavienConfigEntry
+    _failures = 0
+
+    async def _async_update_data(self) -> T:
+        try:
+            data = await self._async_fetch()
+        except UpdateFailed as err:
+            self._failures += 1
+            if self._retry_soon() and self.update_interval is not None:
+                err.retry_after = min(
+                    RETRY_AFTER * 2 ** (self._failures - 1),
+                    self.update_interval.total_seconds(),
+                )
+            raise
+        self._failures = 0
+        return data
+
+    async def _async_fetch(self) -> T:
+        """Fetch the data; errors from `_cloud` mark the update as failed."""
+        raise NotImplementedError
+
+    def _retry_soon(self) -> bool:
+        """Whether a failed update is worth retrying before the next poll."""
+        return True
+
+
+class NavienCoordinator(NavienBaseCoordinator[NavienData]):
+    """Polls status for one BCM module and applies pushed updates."""
 
     def __init__(
         self,
@@ -78,29 +105,27 @@ class NavienCoordinator(DataUpdateCoordinator[NavienData]):
         # Whether the module is connected to the cloud: the REST device list at first, then its connection events.
         self.module_online = device.is_connected
 
-    async def _async_update_data(self) -> NavienData:
+    async def _async_fetch(self) -> NavienData:
         """Poll status; read device info once and the schedule when it's due."""
         previous = self.data
         if previous:
             features = previous.features
         else:
-            features = await _cloud(
-                self.client.async_get_features(self.device),
-                retry_after=STATUS_RETRY_AFTER,
-            )
-        status = await _cloud(
-            self.client.async_get_status(self.device), retry_after=STATUS_RETRY_AFTER
-        )
+            features = await _cloud(self.client.async_get_features(self.device))
+        status = await _cloud(self.client.async_get_status(self.device))
         # It just answered, so it's online even if a connection event was missed.
         self.module_online = True
         schedules = previous.schedules if previous else {}
         if self._schedule_due(status):
             schedules = await _cloud(
-                self.client.async_get_heating_schedules(self.device),
-                retry_after=STATUS_RETRY_AFTER,
+                self.client.async_get_heating_schedules(self.device)
             )
             self._schedules_at = dt_util.utcnow()
         return NavienData(status=status, features=features, schedules=schedules)
+
+    def _retry_soon(self) -> bool:
+        """Not while the module has reported itself offline: it can't answer until it reports back."""
+        return self.module_online is not False
 
     def _schedule_due(self, status: DeviceStatus) -> bool:
         """Refresh the schedule periodically, or as soon as a zone moves to another slot."""
@@ -143,14 +168,12 @@ USAGE_STATISTICS = {
 }
 
 
-class NavienUsageCoordinator(DataUpdateCoordinator[UsageRecord]):
+class NavienUsageCoordinator(NavienBaseCoordinator[UsageRecord]):
     """Hourly fuel use: the year-to-date total for sensors, and daily history imported as long-term statistics.
 
     The year's monthly totals cost one request per hour. Daily records are fetched only when a month's total no
     longer matches the cached days, which happens once a day when the module fills in the day that just ended.
     """
-
-    config_entry: NavienConfigEntry
 
     def __init__(
         self,
@@ -173,8 +196,10 @@ class NavienUsageCoordinator(DataUpdateCoordinator[UsageRecord]):
         # same day.
         self._store = usage_store(hass, device.device_id)
         self._days: dict[date, UsageRecord] | None = None
+        # The day last December was last checked, while January's first days have no total to compare it with.
+        self._last_year_checked: date | None = None
 
-    async def _async_update_data(self) -> UsageRecord:
+    async def _async_fetch(self) -> UsageRecord:
         """Fetch this year's totals, and new daily history when the totals have moved on."""
         today = dt_util.now().date()
         changed_since: date | None = None
@@ -185,18 +210,29 @@ class NavienUsageCoordinator(DataUpdateCoordinator[UsageRecord]):
                 for k, v in stored.get("days", {}).items()
             }
             if not self._days:
-                changed_since = await self._fetch_days(
-                    _months_back(today, USAGE_BACKFILL_MONTHS), today
-                )
+                try:
+                    changed_since = await self._fetch_days(
+                        _months_back(today, USAGE_BACKFILL_MONTHS), today
+                    )
+                except UpdateFailed, ConfigEntryAuthFailed:
+                    # Start the backfill again next time rather than keep a cache with months missing.
+                    self._days = None
+                    raise
         monthly = await _cloud(
             self.client.async_get_monthly_usage(self.device, today.year)
         )
         # Check last month too for the first few days, while its final days are still being filled in.
         for year, month in _months_back(today, 2 if today.day <= 3 else 1):
-            if self._cached_month_matches(year, month, monthly):
+            if year == today.year:
+                if self._cached_month_matches(year, month, monthly):
+                    continue
+            elif self._last_year_checked == today:
+                # This year's totals don't cover last December, so fetch its days once a day instead of hourly.
                 continue
             if (since := await self._fetch_days([(year, month)], today)) is not None:
                 changed_since = min(changed_since or since, since)
+            if year != today.year:
+                self._last_year_checked = today
 
         if changed_since is not None:
             await self._store.async_save(
@@ -274,17 +310,14 @@ class NavienUsageCoordinator(DataUpdateCoordinator[UsageRecord]):
         LOGGER.debug("Imported %s days of gas statistics from %s", len(starts), since)
 
 
-async def _cloud[T](request: Awaitable[T], *, retry_after: float | None = None) -> T:
-    """Run one cloud request, turning its errors into coordinator errors.
-
-    `retry_after` (seconds) brings the coordinator's next try forward after a failure.
-    """
+async def _cloud[T](request: Awaitable[T]) -> T:
+    """Run one cloud request, turning its errors into coordinator errors."""
     try:
         return await request
     except NavienAuthError as err:
         raise ConfigEntryAuthFailed(str(err)) from err
     except NavienError as err:
-        raise UpdateFailed(str(err), retry_after=retry_after) from err
+        raise UpdateFailed(str(err)) from err
 
 
 def _months_back(today: date, count: int) -> list[tuple[int, int]]:

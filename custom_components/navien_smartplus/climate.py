@@ -105,20 +105,36 @@ class NavienZoneClimate(NavienZoneEntity, ClimateEntity):
         )
 
     def _target_or_current(self) -> float:
-        """Setpoint to send with a mode change (the mode command always carries one)."""
-        if self.target_temperature is not None:
-            return self.target_temperature
-        return self.zone.setting_temperature if self.zone else 20.0
+        """Setpoint to send with a mode change (the mode command always carries one).
+
+        The target shown, except in holiday mode, where that's the frost-protection temperature rather than the
+        zone's own setting.
+        """
+        zone = self.zone
+        if zone is None:
+            setpoint = 20.0
+        elif zone.holiday or self.target_temperature is None:
+            setpoint = zone.setting_temperature
+        else:
+            setpoint = self.target_temperature
+        return min(max(setpoint, self.min_temp), self.max_temp)
 
     async def async_set_temperature(self, **kwargs: Any) -> None:
         """Change the setpoint, and the mode if one is given."""
+        mode = self._mode
         if (
             hvac_mode := kwargs.get(ATTR_HVAC_MODE)
         ) is not None and hvac_mode != self.hvac_mode:
             await self.async_set_hvac_mode(hvac_mode)
+            # The reply may not include a status, so go by the mode just set.
+            mode = (
+                self._mode
+                if self.hvac_mode == hvac_mode
+                else NAVIEN_FROM_HVAC_MODE[hvac_mode]
+            )
         if (temperature := kwargs.get(ATTR_TEMPERATURE)) is None:
             return
-        if self._mode == HeatingMode.OFF:
+        if mode == HeatingMode.OFF:
             raise ServiceValidationError(
                 translation_domain=DOMAIN,
                 translation_key="zone_off",
@@ -127,7 +143,7 @@ class NavienZoneClimate(NavienZoneEntity, ClimateEntity):
         # In Auto this starts an Override until the next program slot, as on the thermostat.
         await self._control(
             self.coordinator.client.async_set_zone_temperature(
-                self.device, self.zone_id, temperature, self._mode
+                self.device, self.zone_id, temperature, mode
             )
         )
 

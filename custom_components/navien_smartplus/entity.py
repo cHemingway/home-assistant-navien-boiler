@@ -1,6 +1,7 @@
 """Base entities for Navien Smart Plus."""
 
 from collections.abc import Awaitable
+from typing import Any
 
 from homeassistant.core import callback
 from homeassistant.exceptions import HomeAssistantError
@@ -8,7 +9,10 @@ from homeassistant.helpers.device_registry import (
     CONNECTION_NETWORK_MAC,
     DeviceInfo,
 )
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
+from homeassistant.helpers.update_coordinator import (
+    CoordinatorEntity,
+    DataUpdateCoordinator,
+)
 
 from .api import Device, DeviceStatus, NavienError, ZoneStatus
 from .const import DOMAIN, MANUFACTURER
@@ -33,22 +37,12 @@ def device_info(device: Device, data: NavienData | None = None) -> DeviceInfo:
     return info
 
 
-class NavienEntity(CoordinatorEntity[NavienCoordinator]):
-    """An entity of one BCM module, kept up to date by its coordinator."""
+class NavienBaseEntity[CoordinatorT: DataUpdateCoordinator[Any]](
+    CoordinatorEntity[CoordinatorT]
+):
+    """Sets its `_attr_` state from the coordinator data when added and on every update."""
 
     _attr_has_entity_name = True
-
-    def __init__(self, coordinator: NavienCoordinator, key: str) -> None:
-        """Set up an entity of one module, unique by `key`."""
-        super().__init__(coordinator)
-        self.device = coordinator.device
-        self._attr_unique_id = f"{self.device.device_id}_{key}"
-        self._attr_device_info = device_info(self.device, coordinator.data)
-
-    @property
-    def status(self) -> DeviceStatus:
-        """The module's latest status."""
-        return self.coordinator.data.status
 
     async def async_added_to_hass(self) -> None:
         """Set the initial state before the entity is first written."""
@@ -63,6 +57,22 @@ class NavienEntity(CoordinatorEntity[NavienCoordinator]):
 
     def _update_attrs(self) -> None:
         """Set the entity's `_attr_` state from the coordinator data."""
+
+
+class NavienEntity(NavienBaseEntity[NavienCoordinator]):
+    """An entity of one BCM module, kept up to date by its coordinator."""
+
+    def __init__(self, coordinator: NavienCoordinator, key: str) -> None:
+        """Set up an entity of one module, unique by `key`."""
+        super().__init__(coordinator)
+        self.device = coordinator.device
+        self._attr_unique_id = f"{self.device.device_id}_{key}"
+        self._attr_device_info = device_info(self.device, coordinator.data)
+
+    @property
+    def status(self) -> DeviceStatus:
+        """The module's latest status."""
+        return self.coordinator.data.status
 
     async def _control(self, call: Awaitable[DeviceStatus | None]) -> None:
         """Run a control command and show its resulting status straight away."""
@@ -94,30 +104,14 @@ class NavienZoneEntity(NavienEntity):
         return super().available and self.zone is not None
 
 
-class NavienUsageEntity(CoordinatorEntity[NavienUsageCoordinator]):
+class NavienUsageEntity(NavienBaseEntity[NavienUsageCoordinator]):
     """An entity fed by the hourly usage coordinator."""
-
-    _attr_has_entity_name = True
 
     def __init__(self, coordinator: NavienUsageCoordinator, key: str) -> None:
         """Set up an entity of one module's usage, unique by `key`."""
         super().__init__(coordinator)
         self._attr_unique_id = f"{coordinator.device.device_id}_{key}"
         self._attr_device_info = device_info(coordinator.device)
-
-    async def async_added_to_hass(self) -> None:
-        """Set the initial state before the entity is first written."""
-        await super().async_added_to_hass()
-        self._update_attrs()
-
-    @callback
-    def _handle_coordinator_update(self) -> None:
-        """Update the state from new coordinator data."""
-        self._update_attrs()
-        super()._handle_coordinator_update()
-
-    def _update_attrs(self) -> None:
-        """Set the entity's `_attr_` state from the coordinator data."""
 
     @property
     def available(self) -> bool:

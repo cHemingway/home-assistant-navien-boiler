@@ -234,6 +234,31 @@ async def test_pushes_reach_listeners(
     assert len(raw) == 3
 
 
+async def test_bad_message_keeps_the_connection(
+    client: NavienSmartPlusClient, broker: FakeBroker
+) -> None:
+    """A message that isn't a JSON object, or that a listener fails on, is skipped without dropping MQTT."""
+    statuses: list[DeviceStatus] = []
+
+    def listener(device: Any, status: DeviceStatus) -> None:
+        if not statuses:
+            statuses.append(status)
+            raise ValueError("listener bug")
+        statuses.append(status)
+
+    client.add_status_listener(listener)
+    await client.async_connect()
+
+    broker.push(f"{MODULE}/res", "[1, 2, 3]")
+    broker.push(f"{MODULE}/res", {"sessionID": "998", "response": status_response()})
+    broker.push(f"{MODULE}/res", {"sessionID": "999", "response": status_response()})
+    await settle()
+
+    assert len(statuses) == 2
+    assert client.connected
+    assert len(broker.clients) == 1
+
+
 async def test_request_timeout(
     client: NavienSmartPlusClient, broker: FakeBroker
 ) -> None:

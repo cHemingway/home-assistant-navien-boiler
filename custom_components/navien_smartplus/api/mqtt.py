@@ -129,7 +129,9 @@ class NavienMqtt:
         try:
             data = json.loads(payload)
         except TypeError, ValueError:
-            _LOGGER.debug("Ignoring non-JSON message on %s", topic)
+            data = None
+        if not isinstance(data, dict):
+            _LOGGER.debug("Ignoring message that isn't a JSON object on %s", topic)
             return
         _LOGGER.debug("MQTT <- %s %s", topic, data)
         answered = False
@@ -138,7 +140,11 @@ class NavienMqtt:
             if topic in reply_topics and not future.done():
                 future.set_result(data)
                 answered = True
-        self._on_message(topic, data, answered)
+        try:
+            self._on_message(topic, data, answered)
+        except Exception:
+            # One message the listeners can't handle mustn't end the connection.
+            _LOGGER.exception("Error handling MQTT message on %s", topic)
 
     async def publish(self, topic: str, payload: dict[str, Any]) -> None:
         """Publish one JSON message."""
