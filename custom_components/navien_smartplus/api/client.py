@@ -46,6 +46,17 @@ _REFRESH_MARGIN = 300
 REQUEST_TIMEOUT = 40
 
 
+def _full_status(data: Any) -> DeviceStatus | None:
+    """Parse a status, or return None for a partial one.
+
+    After some commands the module first sends a partial status with no zones and other fields zeroed, then the
+    full one a few seconds later.
+    """
+    if not isinstance(data, dict) or not data.get("thermostats"):
+        return None
+    return DeviceStatus.from_json(data)
+
+
 class NavienSmartPlusClient:
     """Sign in, list devices, read status and send control commands."""
 
@@ -224,13 +235,12 @@ class NavienSmartPlusClient:
             self._on_connection_event(event)
             return
         response = data.get("response")
-        if not isinstance(response, dict) or not isinstance(
-            response.get("status"), dict
-        ):
+        if not isinstance(response, dict):
+            return
+        if (status := _full_status(response.get("status"))) is None:
             return
         if (device := self._device_for_mac(response.get("macAddress"))) is None:
             return
-        status = DeviceStatus.from_json(response["status"])
         for listener in list(self._status_listeners):
             listener(device, status)
 
@@ -330,9 +340,9 @@ class NavienSmartPlusClient:
                 "zoneUseSetting": ZONE_MASK.get(zone_id, 1),
             },
         )
-        if not isinstance(status := response.get("status"), dict):
-            raise NavienConnectionError("Status reply had no status")
-        return DeviceStatus.from_json(status)
+        if (status := _full_status(response.get("status"))) is None:
+            raise NavienConnectionError("Status reply was incomplete")
+        return status
 
     async def async_get_heating_schedules(
         self, device: Device
@@ -395,8 +405,7 @@ class NavienSmartPlusClient:
             },
             control=True,
         )
-        status = response.get("status")
-        return DeviceStatus.from_json(status) if isinstance(status, dict) else None
+        return _full_status(response.get("status"))
 
     async def async_set_zone_mode(
         self, device: Device, zone_id: int, mode: HeatingMode, temperature: float

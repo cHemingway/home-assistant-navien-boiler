@@ -228,6 +228,18 @@ async def test_control_failure_raises() -> None:
         await client.async_set_hot_water_mode(client.devices[0], HotWaterMode.ON)
 
 
+async def test_partial_status_is_not_used() -> None:
+    """A status with no zones, which the module sometimes sends before the full one, isn't returned."""
+    from custom_components.navien_smartplus.api import NavienConnectionError
+
+    partial = {"response": {"status": {"operationBusy": 2, "thermostats": []}}}
+    client, _ = _client_with_fake_mqtt(partial)
+    device = client.devices[0]
+    assert await client.async_set_zone_mode(device, 1, HeatingMode.AUTO, 19.0) is None
+    with pytest.raises(NavienConnectionError, match="incomplete"):
+        await client.async_get_status(device)
+
+
 async def test_mqtt_reply_matching() -> None:
     """Replies match on sessionID and topic; only answered replies are flagged so they aren't broadcast again."""
     import asyncio

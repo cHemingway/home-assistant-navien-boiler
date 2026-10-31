@@ -631,6 +631,9 @@ From the local test instance, starting from Auto with an Override at 18 °C, the
    - The module answered `heat-mode [0]` twice under the same `sessionID`. The first reply, after under a second, was
      a partial status: `thermostats: []`, program numbers 0 and `outsideTempUse` 0. A full status followed 5 s
      later. Applying the first reply made the zone's entities unavailable until the second arrived.
+   - The app ignores such a status: its handler (`BaseViewModel.settingThermostatData`) only applies a status
+     whose `thermostats` list isn't empty. The integration now does the same. The app also drops any status with
+     `nrcConnected` 0; the integration keeps those, because they drive its thermostat connection sensor.
 
 ### Not yet tested on hardware
 

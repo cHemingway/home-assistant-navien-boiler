@@ -234,6 +234,22 @@ async def test_pushes_reach_listeners(
     assert len(raw) == 3
 
 
+async def test_partial_status_push_is_skipped(
+    client: NavienSmartPlusClient, broker: FakeBroker
+) -> None:
+    """A pushed status with no zones is skipped; the full one that follows is passed on."""
+    statuses: list[DeviceStatus] = []
+    client.add_status_listener(lambda device, status: statuses.append(status))
+    await client.async_connect()
+
+    partial = {**status_response(), "status": {"operationBusy": 2, "thermostats": []}}
+    broker.push(f"{MODULE}/res", {"sessionID": "1", "response": partial})
+    broker.push(f"{MODULE}/res", {"sessionID": "1", "response": status_response()})
+    await settle()
+
+    assert [s.zones[1].current_temperature for s in statuses] == [19.5]
+
+
 async def test_bad_message_keeps_the_connection(
     client: NavienSmartPlusClient, broker: FakeBroker
 ) -> None:
