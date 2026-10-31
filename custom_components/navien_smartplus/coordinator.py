@@ -151,9 +151,14 @@ class NavienCoordinator(NavienBaseCoordinator[NavienData]):
     @callback
     def async_handle_online(self, device: Device, online: bool) -> None:
         """The module reported going offline or coming back."""
-        if device.device_id == self.device.device_id:
-            self.module_online = online
-            self.async_update_listeners()
+        if device.device_id != self.device.device_id:
+            return
+        was_offline = self.module_online is False
+        self.module_online = online
+        self.async_update_listeners()
+        if online and (was_offline or not self.last_update_success):
+            # Fetch its status straight away, as the app does, rather than wait for the next poll.
+            self.config_entry.async_create_task(self.hass, self.async_request_refresh())
 
     @callback
     def async_apply_status(self, status: DeviceStatus | None) -> None:

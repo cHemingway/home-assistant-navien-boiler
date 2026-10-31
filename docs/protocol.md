@@ -241,7 +241,7 @@ The app has no status timer. It requests status only:
 The rest of the time it relies on the module's unprompted pushes on `cmd/T/nsp-M/res` (see [Replies](#replies)). The
 integration does the same and polls only every 10 minutes, as a safety net for a missed push or a stalled connection.
 After a failed poll it retries after a minute, doubling the wait up to 10 minutes, but not while the module's
-connection event says it's offline.
+connection event says it's offline. Like the app, it polls as soon as the connection event says the module is back.
 
 ### Reply
 

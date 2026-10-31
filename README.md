@@ -40,7 +40,8 @@ Updates are pushed: the boiler's module reports every change within seconds, whe
 Assistant, the Smart Plus app or on the thermostat, including each 0.5 °C change in room temperature. Status is
 also polled every 10 minutes as a safety net. If the connection to Navien's cloud drops, the integration
 reconnects straight away. If it can't reach the cloud, it tries again after a minute, then waits twice as long each
-time, up to the usual 10 minutes. It doesn't retry early while the module reports itself offline.
+time, up to the usual 10 minutes. It doesn't retry early while the module reports itself offline, but checks again as soon as the module reports it's
+back.
 
 ### Energy dashboard
 

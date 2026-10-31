@@ -445,7 +445,7 @@ async def test_no_quick_retry_while_module_offline(
     config_entry: MockConfigEntry,
     freezer: FrozenDateTimeFactory,
 ) -> None:
-    """Once the module reports it's offline, failed polls wait for the normal interval."""
+    """Once the module reports it's offline, failed polls wait for the normal interval; it's polled as soon as it's back."""
     await setup_entry(hass, config_entry)
     on_online = mock_client.add_online_listener.call_args.args[0]
     on_online(mock_client.devices[0], False)
@@ -456,8 +456,14 @@ async def test_no_quick_retry_while_module_offline(
     polls = status.await_count
     await wait(hass, freezer, timedelta(minutes=5))
     assert status.await_count == polls
-    await wait(hass, freezer, timedelta(minutes=5, seconds=1))
+    assert hass.states.get(CLIMATE).state == "unavailable"
+
+    # It comes back: polled straight away rather than at the next 10-minute poll.
+    status.side_effect = None
+    on_online(mock_client.devices[0], True)
+    await hass.async_block_till_done()
     assert status.await_count == polls + 1
+    assert hass.states.get(CLIMATE).state == "auto"
 
 
 def test_error_states_have_descriptions() -> None:
