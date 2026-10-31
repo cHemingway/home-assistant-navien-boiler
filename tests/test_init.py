@@ -189,6 +189,27 @@ async def test_control_result_updates_state(
     assert hass.states.get(CLIMATE).attributes["temperature"] == 21.0
 
 
+async def test_ending_boost_returns_to_schedule(
+    hass: HomeAssistant, mock_client: MagicMock, config_entry: MockConfigEntry
+) -> None:
+    """Turning the Boost preset off returns the zone to Auto, not manual heating."""
+    status = fixture_status()
+    status.zones[1].mode = HeatingMode.BOOST
+    mock_client.async_get_status.return_value = status
+    await setup_entry(hass, config_entry)
+    assert hass.states.get(CLIMATE).attributes[ATTR_PRESET_MODE] == "boost"
+
+    await hass.services.async_call(
+        CLIMATE_DOMAIN,
+        SERVICE_SET_PRESET_MODE,
+        {ATTR_ENTITY_ID: CLIMATE, ATTR_PRESET_MODE: "none"},
+        blocking=True,
+    )
+    mock_client.async_set_zone_mode.assert_awaited_once_with(
+        mock_client.devices[0], 1, HeatingMode.AUTO, 19.0
+    )
+
+
 async def test_set_temperature_when_off(
     hass: HomeAssistant, mock_client: MagicMock, config_entry: MockConfigEntry
 ) -> None:

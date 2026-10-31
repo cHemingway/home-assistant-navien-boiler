@@ -171,11 +171,9 @@ class NavienZoneClimate(NavienZoneEntity, ClimateEntity):
             mode = HeatingMode.BOOST
         elif preset_mode == PRESET_OVERRIDE:
             mode = HeatingMode.OVERRIDE
-        elif self._mode == HeatingMode.BOOST:
-            # Leaving boost returns to manual heating.
-            mode = HeatingMode.ON
-        elif self._mode == HeatingMode.OVERRIDE:
-            # Cancelling an override returns to the schedule.
+        elif self._mode in (HeatingMode.BOOST, HeatingMode.OVERRIDE):
+            # Ending Boost or an override returns to the schedule. (The app leaves Boost for manual heating,
+            # which never returns to it.)
             mode = HeatingMode.AUTO
         else:
             return
