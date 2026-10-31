@@ -87,7 +87,8 @@ Built for the UK Smart Plus system:
 - Navien LCB700 (oil) and NCB-CE / NCB300 / NCB500 / NCB700 (gas) boilers
 
 Only a gas combi with one NRC-10R thermostat and a BCM-41RW has been tested. The rest use the same app and cloud,
-so they should work, but more zones and the wiring centre are untested. Oil boilers probably report fuel in
+so they should work, but more zones and the wiring centre are untested. Systems with more than one zone probably
+need a change first (see the To do list). Oil boilers probably report fuel in
 litres, which the integration doesn't handle yet: it labels all fuel use as m³ of gas. Reports from other
 systems are welcome as GitHub issues.
 
@@ -115,6 +116,8 @@ device prefix and its own command set for thermostat zones and boilers.
 - Try the hot water modes and switching a zone to Off on real hardware, then enable the hot water entity by
   default.
 - Report oil (LCB700) boiler fuel use in litres instead of m³.
+- Support more than one zone properly: the module seems to report one zone per status, so the integration should
+  combine them and poll each zone, as the app does. It currently polls only zone 1.
 
 ## Credits
 

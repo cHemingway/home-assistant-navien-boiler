@@ -227,8 +227,10 @@ Publish to `cmd/T/nsp-M/st`:
 ```json
 "request": {"command": 16777219, "deviceType": 3, "macAddress": "M", "additionalValue": "A", "zoneUseSetting": 1}
 ```
-`zoneUseSetting` is a zone bitmask: zone 1 → 1, zone 2 → 2, zone 3 → 4. The reply's `thermostats` list covers
-every zone *(verify with more than one zone)*.
+`zoneUseSetting` is a zone bitmask: zone 1 → 1, zone 2 → 2, zone 3 → 4. On this module type (`deviceType` 3) the
+reply's `thermostats` list probably holds only the requested zone *(verify with more than one zone)*: the app's
+status handler for it (`BaseViewModel.settingThermostatDataLegacy`) reads only `thermostats[0]` and merges it into
+its list of zones, and the app asks for one zone's status at a time. The integration doesn't merge zones yet.
 
 ### When the app asks
 
