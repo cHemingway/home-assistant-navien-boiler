@@ -416,7 +416,7 @@ Changing the setpoint, as the app does, depends on the current mode:
 
 In Boost the integration sends `heat-mode [4, t×2]` instead, so the zone goes back to the schedule at the next slot,
 as after a change in Auto, rather than staying in manual heating. Likewise, ending Boost sends `heat-mode [0]` (back
-to Auto) rather than the app's `heat-mode [1, t×2]`. Neither has been tried on hardware yet *(verify)*.
+to Auto) rather than the app's `heat-mode [1, t×2]`. Both confirmed on hardware (see the 2026-10-31 test).
 
 Other mode changes:
 - Cancel an override ("stop override"): `heat-mode [0]`. The zone returns to the schedule.
@@ -621,6 +621,16 @@ The local test instance signed in at 20:11, so its first access token and AWS cr
 - There was no second sign-in, so the reconnect used a refreshed access token and refreshed AWS credentials. This
   confirmed the fix for tracking the two expiry times separately. Before it, renewing the access token made the
   expired AWS credentials look fresh.
+
+### 2026-10-31: leaving Boost (with the owner's OK)
+
+From the local test instance, starting from Auto with an Override at 18 °C, then put back afterwards:
+1. Boost (`heat-mode [3, 36]`): reply mode 3. Then a temperature change, `heat-mode [4, 37]`: reply mode 4 (Override)
+   at 18.5 °C, so the module accepts an Override straight from Boost.
+2. Boost again, then the preset off, `heat-mode [0]`: the zone went back to Auto at the schedule's 16 °C.
+   - The module answered `heat-mode [0]` twice under the same `sessionID`. The first reply, after under a second, was
+     a partial status: `thermostats: []`, program numbers 0 and `outsideTempUse` 0. A full status followed 5 s
+     later. Applying the first reply made the zone's entities unavailable until the second arrived.
 
 ### Not yet tested on hardware
 
