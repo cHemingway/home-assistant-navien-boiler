@@ -418,16 +418,15 @@ class NavienSmartPlusClient:
         temperature: float,
         current_mode: HeatingMode | int,
     ) -> DeviceStatus | None:
-        """Change the setpoint the way the app does for the zone's current mode."""
-        if current_mode == HeatingMode.AUTO:
-            # This starts an override until the next program slot.
+        """Change the setpoint for the zone's current mode.
+
+        As the app does, except in Boost: the app switches to manual heating, which never returns to the schedule.
+        """
+        if current_mode in (HeatingMode.AUTO, HeatingMode.BOOST):
+            # This starts an override until the next program slot (ending Boost), after which the zone follows
+            # the schedule again.
             return await self.async_set_zone_mode(
                 device, zone_id, HeatingMode.OVERRIDE, temperature
-            )
-        if current_mode == HeatingMode.BOOST:
-            # This leaves boost for manual heating.
-            return await self.async_set_zone_mode(
-                device, zone_id, HeatingMode.ON, temperature
             )
         return await self._control(
             device,

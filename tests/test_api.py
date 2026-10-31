@@ -191,7 +191,8 @@ async def test_status_request_shape() -> None:
         ),  # live-tested: Auto -> Override
         (HeatingMode.OVERRIDE, 20.0, 0x02000005, "inside-heat", [40]),
         (HeatingMode.ON, 21.5, 0x02000005, "inside-heat", [43]),
-        (HeatingMode.BOOST, 22.0, 0x02000001, "heat-mode", [1, 44]),
+        # Unlike the app, which leaves Boost for manual heating.
+        (HeatingMode.BOOST, 22.0, 0x02000001, "heat-mode", [4, 44]),
     ],
 )
 async def test_set_temperature_follows_app(

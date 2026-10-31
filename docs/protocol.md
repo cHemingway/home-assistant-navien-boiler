@@ -414,6 +414,9 @@ Changing the setpoint, as the app does, depends on the current mode:
 | ON or OVERRIDE | `inside-heat [t×2]` |
 | OFF | nothing; the app ignores the change |
 
+In Boost the integration sends `heat-mode [4, t×2]` instead, so the zone goes back to the schedule at the next slot,
+as after a change in Auto, rather than staying in manual heating. Not yet tried on hardware *(verify)*.
+
 Other mode changes:
 - Cancel an override ("stop override"): `heat-mode [0]`. The zone returns to the schedule.
 - Boost: `heat-mode [3, t×2]`. It lasts **one hour** and heats to the zone's stored setting

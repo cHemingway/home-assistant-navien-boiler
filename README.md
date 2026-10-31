@@ -29,7 +29,7 @@ One device per Smart Plus module, with:
 
 | Entity | What it does |
 |---|---|
-| Climate, one per zone | Auto (follows the schedule), Heat (manual), Off. Changing the temperature in Auto starts an **Override** until the next program slot, as on the thermostat. Presets: Boost, Override. In Auto the target shown is the schedule's current temperature, as in the app. |
+| Climate, one per zone | Auto (follows the schedule), Heat (manual), Off. Changing the temperature in Auto starts an **Override** until the next program slot, as on the thermostat; changing it during Boost does the same, ending the Boost. Presets: Boost, Override. In Auto the target shown is the schedule's current temperature, as in the app. |
 | Water heater "Hot water" | Hot water mode: Schedule, On, Boost (once), Off. The combi doesn't report water temperatures. **Disabled by default**: changing the mode hasn't been tried on real hardware yet. Enable it under the device's entities to try it. |
 | Switch "Holiday mode" | Holiday (away) mode per zone. While it's on, the zone holds its frost-protection temperature (4 °C on the tested system), and the climate entity shows that as its target, as the app does. |
 | Binary sensors | Burner on, hot water running, fault. Diagnostic: Online (the module's link to Navien's cloud) and, per zone, Thermostat connection (its radio link to the module). |
